@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.1
+
+- Fixed: when the game's control settings listed your support weapon action with no keyboard or mouse key (for example, only a controller button set for it), the mod had no key to swap with. It now uses the default, 3.
+
 ## 1.0.0
 
 First release.
