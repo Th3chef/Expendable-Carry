@@ -1,0 +1,56 @@
+name: Bug report
+description: Your weapon doesn't go on your back or doesn't come back, or the mod doesn't work as described
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for the report! Please attach ExpendableCarry.log, ExpendableCarry.research.log and BingusSharedLoader.log (in %LOCALAPPDATA%\CowboyBingus\Helldivers2\Logs). ExpendableCarry.log shows whether it found what it needs in the game's code, your support weapon key, and every carry and swap.
+  - type: input
+    id: version
+    attributes:
+      label: Mod version
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: game_type
+    attributes:
+      label: Your game
+      options:
+        - Solo
+        - Hosting (others joined my game)
+        - Joined someone else's game
+    validations:
+      required: true
+  - type: dropdown
+    id: input
+    attributes:
+      label: Keyboard or controller
+      options:
+        - Keyboard and mouse
+        - Controller
+    validations:
+      required: true
+  - type: input
+    id: weapons
+    attributes:
+      label: Weapons
+      description: Your support weapon and the expendable you picked up (e.g. Railgun + EAT-17)
+  - type: input
+    id: game
+    attributes:
+      label: Game version / date of the last game update
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected and what happened instead, and about when (the log has times).
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Drag ExpendableCarry.log, ExpendableCarry.research.log and BingusSharedLoader.log here.
