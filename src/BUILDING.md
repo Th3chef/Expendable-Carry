@@ -6,9 +6,8 @@ A Bingus Shared Loader Lua mod: one addon, `lua/expendable_carry.lua`.
                     the addon (plain Lua; Bingus Shared Loader finds it by its first line)
     build.py        builds the mod zip (Python 3 + Pillow):
                       python3 build.py out              -> out/Expendable-Carry-<ver>.zip (the release)
-                      python3 build.py out --tester     -> the Tester build (extra details in the log)
     patch_writer.py writes the patch archive
-    fonts/          Anton (SIL Open Font License), for the icon of test builds
+    fonts/          Anton (SIL Open Font License), for the plain icon build.py draws when artwork/icon.png is missing
     artwork/        the release art:
                       hero.py         the scene, a flat illustration (Python 3 + NumPy, SciPy, Pillow)
                       cards.py        the thumbnail, gallery, GitHub social picture and AyakaMods cover: the scene from
