@@ -19,9 +19,8 @@
 -- feet) and switch to it, with the weapon's own weapon-switch sound, the same calls the game makes when you pick a
 -- weapon up, minus the pickup itself. When the expendable is used up, your weapon goes back in your support slot the
 -- same way but stays on its sling (on your back) until you draw it.
-local VERSION = '1.0.0'
-local TESTER = false          -- Tester and numbered test builds: research details in the log
-local TEST_BUILD = false      -- numbered test builds only: the log goes to Logs\test
+local VERSION = '1.0.1'
+local VERBOSE = false          -- more details in the research log (off in the release)
 
 if rawget(_G, 'ChefExpendableCarry') then return end
 local EC = { version = VERSION, status = 'starting' }
@@ -43,7 +42,7 @@ local WEAPONS = {
   ['7617642765ac38c7'] = { 'EAT-411 Leveller', true },
   ['b16c9d490aa59b77'] = { 'MGX-42 Bullet Storm', true },
   ['5990123d142b16cb'] = { 'MLS-4X Commando', true },
-  ['fc13460592ca79aa'] = { 'Solo Silo Targeting Remote', true },   -- (Test 20) MS-11 Solo Silo: sits in the support slot too
+  ['fc13460592ca79aa'] = { 'Solo Silo Targeting Remote', true },   -- MS-11 Solo Silo: sits in the support slot too
   ['6cfcc7f8801a0266'] = { '40-K Meltagun' }, ['a8cffb316f0b5c5f'] = { 'AC-8 Autocannon' },
   ['89c5493e08ca4207'] = { 'APW-1 Anti-Materiel Rifle' }, ['96de9cd50f7306e6'] = { 'ARC-3 Arc Thrower' },
   ['78a8185f63a70795'] = { 'B/FLAM-80 Cremator' }, ['25aa2fd4643cf4ee'] = { 'FAF-14 Spear' },
@@ -55,7 +54,7 @@ local WEAPONS = {
   ['e8d5f49ad7780e54'] = { 'PLAS-45 Epoch' }, ['26e40437ea275296'] = { 'RL-77 Airburst Rocket Launcher' },
   ['2e9d0bdc48b09e60'] = { 'RS-422 Railgun' }, ['3828e2051aa9e897'] = { 'S-11 Speargun' },
   ['cc786f6491fe7e65'] = { 'StA-X3 W.A.S.P. Launcher' },
-  -- (Test 7) the other weapons that sit in the support slot (their own folders: the Stalwart is under primary_weapons)
+  -- the other weapons that sit in the support slot (their own folders: the Stalwart is under primary_weapons)
   ['085c1edb038ec24e'] = { 'MG-206 Heavy Machine Gun' },
   ['1d5943301a29c940'] = { 'E/GL-21 Grenadier Battlement' },
   ['372481e910c05a76'] = { 'TACTICAL VIDEO CAMERA' },
@@ -99,7 +98,7 @@ local ADV = (pcall(ffi.load, 'advapi32')) and ffi.load('advapi32') or nil
 local PROCESS = K32.EcGetCurrentProcess()
 
 -- ======================================================================================================
--- Log: Logs\ExpendableCarry.log (numbered test builds: Logs\test\ExpendableCarry.log)
+-- Log: Logs\ExpendableCarry.log
 -- ======================================================================================================
 local LOADER = rawget(_G, 'CowboyBingusModLoader')
 local V19 = type(LOADER) == 'table' and type(rawget(LOADER, 'capabilities')) == 'table'
@@ -112,11 +111,6 @@ do
     dir = base and (base .. '\\CowboyBingus\\Helldivers2\\Logs') or nil
   end
   if dir then dir = dir:gsub('[\\/]+$', '') end
-  if dir and TEST_BUILD then
-    pcall(K32.EcCreateDirectoryA, dir .. '\\test', nil)
-    local f = io.open(dir .. '\\test\\ExpendableCarry.log', 'a')
-    if f then f:close(); dir = dir .. '\\test' end
-  end
   LOGDIR = dir
 end
 local LOGFILE = LOGDIR and (LOGDIR .. '\\ExpendableCarry.log') or nil
@@ -302,7 +296,7 @@ local P = {
   -- ... after setting the source's first- or third-person mix ('avatar_perspective': the helldiver state's answer)
   persp = '41 8B 55 04 48 8B 0D ?? ?? ?? ?? 48 8B 9B ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B C8 48 8D 15 ?? ?? ?? ?? 0F 57 D2'
        .. ' F3 48 0F 2A D1 48 8B CE FF D3',
-  -- (Test 12) the same handler turning the wielder's entity into its UNIT (the entity table's row +12), then asking the
+  -- the same handler turning the wielder's entity into its UNIT (the entity table's row +12), then asking the
   -- entity API (+0x18 table) whether that unit is alive (+0x720): the API's functions take units, not entity ids
   unit_alive = '41 8B 55 04 48 8D 4C 24 40 4C 8B F8 E8 ?? ?? ?? ?? 8B 7C 24 40 85 FF 0F 84 ?? ?? ?? ?? 48 8B 0D ?? ?? ?? ??'
             .. ' 48 8B 51 18 8B CF 4C 8B 82 ?? ?? ?? ?? 41 FF D0',
@@ -314,7 +308,7 @@ local P = {
   -- &rotation, lerp time): the one call that puts every holstered weapon on a helldiver's back
   attach = 'F2 41 0F 10 47 2C F2 0F 11 44 24 60 F3 0F 11 64 24 74 F3 0F 11 54 24 78 48 8B 0D ?? ?? ?? ?? 48 8D 44 24 60'
         .. ' 45 8B CC 48 89 44 24 20 44 8B C7 8B D3 E8 ?? ?? ?? ??',
-  -- (Test 13) the interactables' switch for one interaction (manager, entity, interaction, on): the game's own way to
+  -- the interactables' switch for one interaction (manager, entity, interaction, on): the game's own way to
   -- turn a pick-up on or off; it keeps one bit per interaction in the enabled words (+0x14078, 16 bytes per
   -- interactable) and refuses to turn one on while the interactable's 'blocked' byte is set. Found where a pick-up's
   -- delay runs out and the game turns it on.
@@ -411,7 +405,7 @@ local function resolve()
     return a
   end)
   if oka then G.audio = ea else G.audio_note = tostring(ea) end
-  -- (Test 11) the sound's first- or third-person mix: the helldiver state's routine and the source's parameter call
+  -- the sound's first- or third-person mix: the helldiver state's routine and the source's parameter call
   if G.audio then
     local okp, ep = pcall(function()
       local o3, t3 = at('persp')
@@ -422,7 +416,7 @@ local function resolve()
     end)
     if okp then G.audio.persp = ep else G.audio.persp_note = tostring(ep) end
   end
-  -- (Test 11) the game's attachables: the attach that puts every holstered weapon on a helldiver's back, and its
+  -- the game's attachables: the attach that puts every holstered weapon on a helldiver's back, and its
   -- detach (without them your weapon stays where the game set it down, locked, and the swap back still works)
   local okt, et = pcall(function()
     local oh, th = at('holster_node'); local oa, ta = at('attach'); local od, td = at('detach'); local ou, tu = at('unit_alive')
@@ -448,7 +442,7 @@ local function resolve()
     return A
   end)
   if okt then G.att = et else G.att_note = tostring(et) end
-  -- (Test 13) the interactables' switch (optional: without it the pick-up is only kept off by hand)
+  -- the interactables' switch (optional: without it the pick-up is only kept off by hand)
   local oki, ei = pcall(function()
     local o5, t5 = at('iswitch')
     local f = gb + crva + o5 + 18 + si32(t5, 14)
@@ -515,7 +509,7 @@ local function map_get(addr, key, maxcap)
   return nil
 end
 -- an entity's row: type hash (hex), its id (+8), unit id (+12), flags byte (+20); nil when it has none.
--- Test 1 showed the entity map is NOT keyed by the id the rows hold (your helldiver: players block a4, row id fb), so
+-- The entity map is NOT keyed by the id the rows hold (your helldiver: players block a4, row id fb), so
 -- an id is found by its row: remembered per id, checked on every use, else all rows are read once (48 KB).
 local row_of = {}
 local function row_at(e)
@@ -856,7 +850,7 @@ local function equip_step(now)
     R.av, R.avunit = me.rid, me.unit
     rec(string.format('your helldiver: handle %x -> entity %s', h, describe(me.rid)))
     -- the engine side once per helldiver: its unit and nodes (and your weapons', added when the equipment is read)
-    if TESTER then R.lua_probe, R.probe_keys = now + 3, { [AVATAR_TYPE] = 'your helldiver?' } end
+    if VERBOSE then R.lua_probe, R.probe_keys = now + 3, { [AVATAR_TYPE] = 'your helldiver?' } end
     R.probe_why = 'your helldiver'
     if me.type ~= AVATAR_TYPE or bit.band(me.flags, 3) ~= 1 then
       rec(string.format('  (not a helldiver of yours: type %s flags %02x)', me.type, me.flags)); R.av = nil
@@ -869,7 +863,7 @@ local function equip_step(now)
   R.eq = ea
   local s = read_string(ea, 48)
   if not s then return end
-  R.held = su32(s, 28)                            -- (Test 2) +0x1C: the slot in your hands (1 primary, 2 secondary, 3 support, 5 throwable)
+  R.held = su32(s, 28)                            -- +0x1C: the slot in your hands (1 primary, 2 secondary, 3 support, 5 throwable)
   R.support = su32(s, 8)
   if s == R.last_eq then return end
   local old = R.last_eq
@@ -882,20 +876,20 @@ local function equip_step(now)
     return
   end
   local was, now_id = su32(old, 8), su32(s, 8)
-  if TESTER or was ~= now_id then rec('equipment changed (' .. diff(old, s, 8) .. '): ' .. slots_text(s)) end
+  if VERBOSE or was ~= now_id then rec('equipment changed (' .. diff(old, s, 8) .. '): ' .. slots_text(s)) end
   if was ~= now_id then
     local ew, en = entity(was), entity(now_id)
     local w_exp = ew and WEAPONS[ew.type] and WEAPONS[ew.type][2]
     local n_exp = en and WEAPONS[en.type] and WEAPONS[en.type][2]
-    if TESTER and now_id ~= 0 and now_id ~= 0xFFFFFFFF and en and WEAPONS[en.type] then start_watch(now_id, 'now in your support slot') end
-    if TESTER and was ~= 0 and was ~= 0xFFFFFFFF then
+    if VERBOSE and now_id ~= 0 and now_id ~= 0xFFFFFFFF and en and WEAPONS[en.type] then start_watch(now_id, 'now in your support slot') end
+    if VERBOSE and was ~= 0 and was ~= 0xFFFFFFFF then
       start_watch(was, n_exp and 'set down for an expendable' or (now_id == 0 and 'left the support slot (dropped, used up or died)' or 'replaced'))
     end
     if n_exp and ew and not w_exp then
       stats.swaps = stats.swaps + 1
       R.carry_swap = { w = was, x = now_id, wt = ew.type, xt = en.type, at = now }   -- (the carry takes it from here)
       rec(string.format('you picked up the %s; the game set your %s down', wname(en.type), wname(ew.type)))
-      if TESTER then
+      if VERBOSE then
         local keys = R.lua_probe and R.probe_keys or {}     -- (a probe still waiting is merged into this one)
         keys[AVATAR_TYPE], keys[ew.type], keys[en.type] = 'your helldiver?', 'your ' .. wname(ew.type), 'the ' .. wname(en.type)
         R.lua_probe, R.probe_why, R.probe_keys = now + 1.0, 'after a swap', keys
@@ -969,7 +963,8 @@ local HOLSTER = {
   ['f2b4a99d1b0e40c8'] = { 'support' },   -- (unnamed support-slot equipment)
 }
 local function holster_of(t) return HOLSTER[t] end
--- each weapon's own weapon-switch (wield) sound: its Equipment data's weapon_switch_wield_audio_event (Oct 2026 build)
+-- each weapon's own weapon-switch (wield) sound: its Equipment data's weapon_switch_wield_audio_event (Oct 2026 build;
+-- the TX-41 Sterilizer has none, so it is drawn silently, as in the game)
 local WIELD_SOUND = {
   ['02eecd0b1fa49630'] = 0x78aa7817,
   ['085c1edb038ec24e'] = 0x2c9eda11,
@@ -1062,9 +1057,9 @@ local function entry_of(st)
   return e, t
 end
 
--- (Test 13) the pick-up switched off and kept off the game's own way, while your weapon is on your back. Test 12: the
--- prompt to pick it up stayed and flickered - the game turns the entry's 'on' byte back on every frame, and the mod
--- only turned it off 4 times a second. Now the game's switch turns that interaction off (its enabled bit; the change
+-- the pick-up switched off and kept off the game's own way, while your weapon is on your back (the game turns the
+-- entry's 'on' byte back on every frame, so turning that byte off alone leaves a flickering prompt). The game's
+-- switch turns that interaction off (its enabled bit; the change
 -- goes to the other players' games too) and the interactable's 'blocked' byte keeps anything from turning it on again,
 -- and the 'on' byte is still turned off every frame. Both are undone before the weapon is equipped or set down.
 local ISWITCH = ffi.typeof('void (*)(void *, uint32_t, uint32_t, uint8_t)')
@@ -1128,8 +1123,8 @@ local function game_equip(eqm, player, w, wield_rec)
   end
 end
 -- the weapon's own weapon-switch sound, the way the game's wield handler plays it: on the weapon's audio source, with
--- the first- or third-person mix set first. (Test 10: the audio API's functions are not in game.dll or the exe - the
--- audio engine is its own module - so a function is now checked to be in loaded code of any module, and named.)
+-- the first- or third-person mix set first. (The audio API's functions are not in game.dll or the exe - the audio
+-- engine is its own module - so a function is checked to be in loaded code of any module, and named.)
 local AUD_ARG = ffi.typeof('void *(*)(void *)')
 local AUD_UNIT = ffi.typeof('void *(*)(uint32_t)')
 local AUD_SRC = ffi.typeof('uint64_t (*)(void *, void *, uint64_t)')
@@ -1152,9 +1147,9 @@ local function module_of(p)
   return string.format('%s+%x', name, p - tonumber(ffi.cast('uintptr_t', MODH[0])))
 end
 local UNIT_ALIVE = ffi.typeof('uint8_t (*)(uint32_t)')
--- (Test 12) is this unit alive, by the entity API's own check (safe for any number: the game calls it on ids it is
--- not sure of). Test 11 crashed the game: the node lookup was given your helldiver's entity id where the API wants a
--- unit, and it read a unit that isn't there. Every unit is now checked with this before it is handed to the API.
+-- is this unit alive, by the entity API's own check (safe for any number: the game calls it on ids it is not sure
+-- of). The node lookup wants a unit, not an entity id, and reads whatever it is given, so every unit is checked with
+-- this before it is handed to the API.
 local function unit_alive(u)
   local A = G.att
   if not (A and u and u ~= 0) then return false end
@@ -1199,9 +1194,8 @@ local function game_sound(event, weapon_unit, wielder)
   return nil, mix
 end
 
--- the game's attachables (Test 11). Tests 7-10 showed a copy spawned by a mod is drawn where it was spawned, whatever
--- the engine says about its position: the game draws its units from its own entities. So now your real weapon is put
--- on your back by the game itself, with the attach it uses for every holstered weapon (weapon, helldiver, node,
+-- the game's attachables. A copy spawned by a mod is drawn where it was spawned, whatever the engine says about its
+-- position (the game draws its units from its own entities), so your real weapon is put on your back by the game itself, with the attach it uses for every holstered weapon (weapon, helldiver, node,
 -- position offset, rotation, lerp time; it pauses the weapon's physics itself, and its detach turns them back on).
 local ATTACH = ffi.typeof('void (*)(void *, uint32_t, uint32_t, uint32_t, const float *, const float *, float)')
 local DETACH = ffi.typeof('void (*)(void *, uint32_t, uint8_t, uint64_t)')
@@ -1299,9 +1293,8 @@ local function put_on_back(st, why, quiet)
   if not h then return 'no holster spot known for it' end
   if not G.att then return 'the game\'s attach was not found' end
   if not (R.av and R.avunit) then return 'no helldiver' end
-  -- (Test 19: the APW-1 was flipped about 180 degrees with a Bullet Storm in hand) always the weapon's own holster
-  -- node and offsets, the way the game holsters it: Tests 11-18 moved it to the other node when the expendable uses the
-  -- same one, where the holster rotation is a launcher's. The expendable is in your hands, so the node is free.
+  -- always the weapon's own holster node and offsets, the way the game holsters it (another node's holster rotation
+  -- is made for other weapons and turns yours the wrong way). The expendable is in your hands, so the node is free.
   local node = h[1]
   if not quiet then
     rec(string.format('carry: attaching your %s (entity %x) to your helldiver (unit %x) on %s', wname(st.wt), st.w, R.avunit, node))
@@ -1318,7 +1311,7 @@ local function put_on_back(st, why, quiet)
 end
 
 -- your support weapon was just set down for an expendable: locked, its pick-up off, on your back
--- (Test 16) Joined games: the host's game runs your pickups and owns your weapon
+-- Joined games: the host's game runs your pickups and owns your weapon
 -- once it is set down, so your game can't lock it, attach it to your back or equip it. What it can do is what your own
 -- E press does: send the host a pickup request for it, through the game's interaction routine (the same call Solo
 -- Buddy Bunkers makes in joined games). The host's game carries a request out with no range check, so your support
@@ -1428,16 +1421,16 @@ end
 local function play_switch(wt, w, wu)
   local ev = WIELD_SOUND[wt]
   if not G.audio then rec('carry: no weapon-switch sound (not found in the game code)'); return end
-  if not ev then rec('carry: no weapon-switch sound known for the ' .. wname(wt)); return end
+  if not ev then rec('carry: the game has no weapon-switch sound for the ' .. wname(wt)); return end
   rec(string.format('carry: playing the %s\'s weapon-switch sound %08x', wname(wt), ev)); write_log_now()
   local we = entity(w)
   local oks, why, mix = pcall(game_sound, ev, we and we.unit or wu, R.av)
   rec('carry: weapon-switch sound: ' .. (oks and (why or ('played, ' .. tostring(mix))) or ('error ' .. tostring(why))))
 end
 
--- (Test 15) an expendable picked up while your primary or secondary is out goes into your hands: you picked it up
--- to use it. (Test 14: it went onto your back with your weapon, so the support key drew the expendable first, and only
--- the second press dropped it and brought your weapon back.) The game's own weapon switch to the support slot, a
+-- an expendable picked up while your primary or secondary is out goes into your hands: you picked it up to use it
+-- (otherwise it would sit on your back with your weapon, and the support key would draw it first). The game's own
+-- weapon switch to the support slot, a
 -- moment after the pickup so the pickup itself is done, with the expendable's own weapon-switch sound.
 local function draw_expendable(st)
   if R.held == 3 or R.support ~= st.x then return end            -- (already in hand, or no longer the expendable)
@@ -1472,9 +1465,8 @@ local function swap_back(st, why, now)
   if wr and read_u32(wr) ~= R.av then wr = nil end               -- (the wield record must be yours)
   if R.held == 5 then wr = nil end                                -- (a grenade or beacon in hand: the game doesn't wield either)
   if not st.wield then wr = nil end                               -- (used up: it goes back on its sling; you draw it yourself)
-  -- (Tests 7-9 marked your hands empty first, hoping the game would draw the weapon with its own sound: it didn't. The
-  -- weapon is equipped straight into your hands and its own weapon-switch sound is played the way the game's wield
-  -- handler plays it.)
+  -- (The weapon is equipped straight into your hands, and its own weapon-switch sound is played the way the game's
+  -- wield handler plays it.)
   rec(string.format('carry: equipping your %s through the game (%s%s)', wname(st.wt), why, wr and ', then switching to it' or ''))
   write_log_now()
   local ok, e = pcall(game_equip, eqm, R.av, st.w, wr)
@@ -1483,12 +1475,12 @@ local function swap_back(st, why, now)
   C.pending = { w = st.w, wt = st.wt, at = now, why = why, wield = wr ~= nil, wr = wr }
 end
 
--- (1.0.0) your support weapon key, the one you set in the
--- game: Helldivers 2 keeps the bindings you changed in its input settings file in Steam Cloud
+-- your support weapon key, the one you set in the game: Helldivers 2 keeps the bindings you changed in its input settings file in Steam Cloud
 -- (<Steam>\userdata\<your Steam account>\553850\remote\input_settings.config; the Steam folder and the signed-in
 -- account come from Steam's own registry values). Its 'ChangeEquipmentSupport' entry lists your keyboard and mouse
--- keys for it; without one (you never changed it) it is the game's default, 3. Read again every 15 s, so a key changed
--- in the game's options counts from then on. (A controller has no support weapon button of its own: not covered.)
+-- keys for it; without one (you never changed it), or with no keyboard or mouse key in it, it is the game's default, 3.
+-- Read again every 15 s while nothing is carried, so a key changed in the game's options counts from then on. A
+-- controller has no support weapon button: its weapon switch button is used instead (below).
 local KEYS = { list = nil, text = nil, next_read = 0 }
 local support_key_pressed, pad_switch, keys_step
 do
@@ -1558,8 +1550,7 @@ do
     end
     return list
   end
-  -- (1.0.0) a controller has no support
-  -- weapon button: its weapon switch (the game's ChangeEquipmentContextSensitiveShort: Y / Triangle, a press; held, the
+  -- a controller has no support weapon button: its weapon switch (the game's ChangeEquipmentContextSensitiveShort: Y / Triangle, a press; held, the
   -- weapon wheel) brings your weapon back instead. The engine's pads (Pad1..Pad4) name the buttons a, b, x, y,
   -- left_shoulder ...; the file names them XboxY, XboxLeftShoulder ...
   local function pad_names(inp)
@@ -1586,7 +1577,7 @@ do
   local function read_keys(now, K, M)
     KEYS.next_read = now + 15
     local path, why, ftime = input_file()
-    -- (1.0.0 review) the same file, unchanged since the last read: nothing to do
+    -- the same file, unchanged since the last read: nothing to do
     local stamp = tostring(path) .. '|' .. tostring(ftime)
     if KEYS.list and #KEYS.list > 0 and stamp == KEYS.stamp then return end
     KEYS.stamp = stamp
@@ -1598,6 +1589,10 @@ do
         binds = bindings(t, 'ChangeEquipmentSupport', { Keyboard = true, Mouse = true })
         pbinds = bindings(t, 'ChangeEquipmentContextSensitiveShort', { PadXBOX = true })
         cbinds = bindings(t, 'OpenChat', { Keyboard = true })
+        -- (1.0.1) an entry with none of these devices (e.g. only a controller button set for it) is the default
+        if binds and #binds == 0 then binds = nil end
+        if pbinds and #pbinds == 0 then pbinds = nil end
+        if cbinds and #cbinds == 0 then cbinds = nil end
       end
     end
     local list, names, src = {}, {}, nil
@@ -1631,7 +1626,7 @@ do
       pnames[#pnames + 1] = b[2]:gsub('^Xbox', '') .. (found and '' or ' (not readable by the mod)')
     end
     KEYS.pads = pads
-    -- (1.0.0 review) chat: opened with the game's OpenChat key (enter by default), closed with enter or escape;
+    -- chat: opened with the game's OpenChat key (enter by default), closed with enter or escape;
     -- your support weapon key typed in a message doesn't swap
     local chat = {}
     for _, b in ipairs(cbinds or { { 'Keyboard', 'enter' } }) do
@@ -1750,7 +1745,7 @@ carry_step = function(now)
   end
 end
 
--- (1.0.0 review) a joined game is told apart by your interactor's request to the host (the pickup you asked for is
+-- a joined game is told apart by your interactor's request to the host (the pickup you asked for is
 -- carried out by the host's game). Your interactor's request is found once a second; every frame reads one word of it.
 local function find_request()
   local mgr = read_ptr(G.imgr); if not mgr then return nil end
@@ -1773,9 +1768,9 @@ end
 local function frame(now)
   equip_step(now)
   request_step(now)
-  if TESTER then interactor_step(); input_step(now) end
+  if VERBOSE then interactor_step(); input_step(now) end
   carry_step(now)
-  if TESTER then
+  if VERBOSE then
     watch_step(now)
     if R.lua_probe and now >= R.lua_probe then
       R.lua_probe = nil
@@ -1818,7 +1813,7 @@ local function start()
   local ok, e = pcall(resolve)
   if not ok then broken = true; EC.status = 'off: could not find what it needs in the game code (' .. tostring(e) .. ')'; write_log(); return end
   EC.status = 'on (solo and hosting: on your back; joined games: the key asks the host for your weapon)'
-  if TESTER then pcall(lua_probe, 'start', { [AVATAR_TYPE] = 'helldiver' }) end
+  if VERBOSE then pcall(lua_probe, 'start', { [AVATAR_TYPE] = 'helldiver' }) end
   write_log()
 end
 if V19 then
