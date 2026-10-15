@@ -102,8 +102,8 @@ def check_private(paths):
 
 
 def main():
-    out, args = sys.argv[1], sys.argv[2:]
-    test, full, guid, suffix, label = None, VERSION, GUID_RELEASE, '', ''
+    out = sys.argv[1]
+    full, guid, name = VERSION, GUID_RELEASE, 'Expendable-Carry-%s.zip' % VERSION
     clean_out(out)
     pkg = os.path.join(out, 'pkg'); os.makedirs(pkg)
     src = open(os.path.join(HERE, 'lua', 'expendable_carry.lua'), encoding='utf-8').read()
@@ -122,10 +122,10 @@ def main():
     base = os.path.join(pkg, '9ba626afa44a3aa3.patch_0')
     open(base, 'wb').write(toc); open(base + '.gpu_resources', 'wb').write(gpu); open(base + '.stream', 'wb').write(stream)
     art = os.path.join(HERE, 'artwork', 'icon.png')
-    if os.path.exists(art) and not test:      # the release art, 512x512 (Arsenal shows it small)
+    if os.path.exists(art):                   # the release art, 512x512 (Arsenal shows it small)
         Image.open(art).convert('RGB').resize((512, 512), Image.LANCZOS).save(os.path.join(pkg, 'icon.png'), optimize=True)
     else:
-        icon(label).save(os.path.join(pkg, 'icon.png'), optimize=True)
+        icon('').save(os.path.join(pkg, 'icon.png'), optimize=True)
     man = {'Version': 1, 'Guid': guid, 'Name': 'Expendable Carry ' + full,
            'Description': ('Pick up an expendable support weapon (EAT-17, EAT-700, EAT-411, MGX-42, MLS-4X) or the Solo Silo targeting remote and keep '
                            'your own: your support weapon goes onto your back. Press your support weapon key (3, or the key you set in the game) with '
@@ -136,7 +136,7 @@ def main():
            'IconPath': 'icon.png'}
     open(os.path.join(pkg, 'manifest.json'), 'w', encoding='utf-8', newline='\n').write(json.dumps(man, indent=2))
     check_private([base, base + '.gpu_resources', base + '.stream', os.path.join(pkg, 'manifest.json')])
-    z = os.path.join(out, 'Expendable-Carry-%s.zip' % (VERSION + suffix))
+    z = os.path.join(out, name)
     with zipfile.ZipFile(z, 'w', zipfile.ZIP_DEFLATED) as zf:
         for f in sorted(os.listdir(pkg)):
             zi = zipfile.ZipInfo(f, ZIP_DATE)
