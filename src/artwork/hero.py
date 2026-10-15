@@ -215,5 +215,6 @@ def hero(W, H, cx, cy, s, seed=7, labels=True):
     return out
 
 
-if __name__ == '__main__':
-    hero(1920, 1080, 1250, 560, 520).save('/tmp/hero_test.png')
+if __name__ == '__main__':      # python3 hero.py <out.png>: the scene alone, for a look
+    import sys
+    hero(1920, 1080, 1250, 560, 520).save(sys.argv[1] if len(sys.argv) > 1 else 'hero.png')
