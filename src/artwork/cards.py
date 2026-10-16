@@ -14,7 +14,7 @@ FONTS = {'Anton': 'fonts/anton-latin-400-normal.woff2',
          'Barlow Condensed B': 'fonts/barlow-condensed-latin-800-normal.woff2'}
 
 TAGLINE = 'Keep your support weapon on your back'
-FEATURES = ['EAT-17 / 700 / 411', 'MGX-42', 'MLS-4X', 'SOLO SILO REMOTE']
+FEATURES = ['EAT-17 / 700 / 411', 'MGX-42', 'MLS-4X', 'SOLO SILO REMOTE', 'TWO AT ONCE']
 
 
 def b64(path_or_img):
@@ -79,7 +79,7 @@ def main():
       </div>
       <div style="position:absolute;left:0;right:0;bottom:150px;text-align:center">
         <span class="band" style="font-size:46px">%(t)s</span></div>
-      <div style="position:absolute;left:60px;right:60px;bottom:58px">%(f)s</div>""" % {'v': ver, 't': TAGLINE, 'f': feats(38, True)}))
+      <div style="position:absolute;left:40px;right:40px;bottom:58px">%(f)s</div>""" % {'v': ver, 't': TAGLINE, 'f': feats(34, True)}))
     # gallery photo 16:9: the slots on the right, the text on the left
     W, H = 1920, 1080
     bg = hero.hero(W, H, 1320, 560, 400, seed=11)
