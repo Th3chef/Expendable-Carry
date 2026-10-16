@@ -11,7 +11,7 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, HERE)
 import patch_writer
 
-VERSION = '1.1.0'
+VERSION = '1.1.1'
 GUID_RELEASE = 'c8c1dd5a-ec87-4227-b67b-0ff28bc73feb'
 LUA = 0xa14e8dfa2cd117e2
 ADDON = 'mods/chef/expendable_carry'
@@ -131,7 +131,7 @@ def main():
                            'your own: your support weapon goes onto your back. Press your support weapon key (3, or the key you set in the game) with '
                            'the expendable in hand and your weapon is back in your hands (the expendable is dropped); '
                            'use the expendable up and your weapon stays on your back until you draw it. On a controller, '
-                           'tap the switch weapon button. With no support weapon of your own, picking up a second expendable carries the first one the same way. In a joined game the key asks the host for your weapon back from '
+                           'tap the switch weapon button. Switching to your primary or secondary drops the expendable. With no support weapon of your own, picking up a second expendable carries the first one the same way. In a joined game the key asks the host for your weapon back from '
                            'wherever it was set down. Requires Bingus Shared Loader v19 or newer.'),
            'IconPath': 'icon.png'}
     open(os.path.join(pkg, 'manifest.json'), 'w', encoding='utf-8', newline='\n').write(json.dumps(man, indent=2))
