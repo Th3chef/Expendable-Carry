@@ -4,7 +4,7 @@
 
 *Pick up an EAT and keep your support weapon on your back.*
 
-**Download:** `Expendable-Carry-1.1.0.zip` from the [latest release](https://github.com/Th3chef/Expendable-Carry/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
+**Download:** `Expendable-Carry-1.1.1.zip` from the [latest release](https://github.com/Th3chef/Expendable-Carry/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
 
 ## What it does
 
@@ -23,6 +23,7 @@ It's for using an expendable **for a moment** without losing your weapon. It is 
 ## Good to know
 
 - **One at a time:** switching back always drops the expendable; it doesn't stay with you. To use it again, pick it back up.
+- **Switching weapons:** switch to your primary or secondary with the expendable in hand and the expendable is dropped; your support weapon stays on your back. A grenade or stratagem throw keeps the expendable.
 - **Your own key:** the mod uses your support weapon key from the game's controls, so a key you changed works too. Typing it in the chat doesn't swap.
 - **Controllers:** a controller has no support weapon button, so tap your switch weapon button (Y / Triangle by default) with the expendable in hand. Holding it for the weapon wheel doesn't swap.
 - **Another weapon out:** if your primary or secondary is out when you pick up an expendable, the expendable goes into your hands.
@@ -48,7 +49,7 @@ None. It's on as soon as it's installed.
 ## Install / update
 
 1. Install [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer if you don't have it.
-2. Mod manager (Arsenal / HD2 Mod Manager): add `Expendable-Carry-1.1.0.zip` and enable it, then **Purge** and **Deploy**.
+2. Mod manager (Arsenal / HD2 Mod Manager): add `Expendable-Carry-1.1.1.zip` and enable it, then **Purge** and **Deploy**.
 
 ## Uninstall
 

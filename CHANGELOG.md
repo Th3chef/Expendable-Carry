@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.1
+
+- Switching to your primary or secondary with an expendable in hand now drops the expendable. Before, the game holstered it on your back next to your carried support weapon.
+
 ## 1.1.0
 
 - New: with no support weapon of your own, a second expendable carries the first one (two EATs from one pod, an EAT and a Commando, the Solo Silo's remote and an EAT). It goes on your back, or the remote on its spot on your belt, and your support weapon key swaps back.
