@@ -4,7 +4,7 @@
 
 *Pick up an EAT and keep your support weapon on your back.*
 
-**Download:** `Expendable-Carry-1.0.1.zip` from the [latest release](https://github.com/Th3chef/Expendable-Carry/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
+**Download:** `Expendable-Carry-1.1.0.zip` from the [latest release](https://github.com/Th3chef/Expendable-Carry/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
 
 In the base game you only have one support weapon slot: pick up an EAT and the game drops your Railgun, Autocannon or machine gun on the ground. With this mod your own support weapon goes onto your back instead, exactly where the game holsters it, while the expendable is in your hands. When you're done, press your support weapon key: the expendable drops at your feet and your weapon is back in your hands, with its weapon-switch sound. Use the expendable up and your weapon stays on its sling until you draw it, like a real sling.
 
@@ -15,6 +15,7 @@ In the base game you only have one support weapon slot: pick up an EAT and the g
 - **Your own key:** the mod reads your support weapon key from the game's control settings (3 by default), so a rebound key works too. Typing it in the chat doesn't swap.
 - **Controllers:** a controller has no support weapon button, so tap your switch weapon button (Y / Triangle by default) with the expendable in hand. Holding it for the weapon wheel doesn't swap.
 - **Used up:** fire the last shot and your weapon goes back to your support slot, still on your back, until you draw it.
+- **Two at once:** with no support weapon of your own, pick up a second expendable while you hold one (two EATs from one pod, an EAT and a Commando, the Solo Silo's remote and an EAT) and the first one is carried the same way: on your back, or the remote on its spot on your belt. Your support weapon key swaps back.
 - **Drawn on pickup:** pick up an expendable with your primary or secondary out and the expendable goes into your hands.
 - **No range limit:** your weapon goes wherever you go, and comes back wherever you are.
 - **Safe while carried:** solo and when you host, nobody can pick your weapon up (players without the mod included), and its pickup prompt is off.
@@ -22,7 +23,7 @@ In the base game you only have one support weapon slot: pick up an EAT and the g
 
 ## Expendables
 
-EAT-17 Expendable Anti-Tank, EAT-700 Expendable Napalm, EAT-411 Leveller, MGX-42 Bullet Storm, MLS-4X Commando and the MS-11 Solo Silo's targeting remote. Every weapon that sits in the support slot can be carried.
+EAT-17 Expendable Anti-Tank, EAT-700 Expendable Napalm, EAT-411 Leveller, MGX-42 Bullet Storm, MLS-4X Commando and the MS-11 Solo Silo's targeting remote. Every weapon that sits in the support slot can be carried, and with no support weapon of your own, so can an expendable when you pick up a second one.
 
 ## Options
 
@@ -35,7 +36,7 @@ None. It's on as soon as it's installed.
 ## Install / update
 
 1. Install [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer if you don't have it.
-2. Mod manager (Arsenal / HD2 Mod Manager): add `Expendable-Carry-1.0.1.zip` and enable it, then **Purge** and **Deploy**.
+2. Mod manager (Arsenal / HD2 Mod Manager): add `Expendable-Carry-1.1.0.zip` and enable it, then **Purge** and **Deploy**.
 
 ## Uninstall
 
@@ -54,6 +55,7 @@ Disable it in your mod manager, then Purge and Deploy. Its log files stay in the
 - Joined games: your weapon lies where it was set down for everyone, so it shows on the other players' minimaps, and a squadmate could pick it up (the mod then lets it go).
 - Controllers: the switch weapon button brings your weapon back (there's no support weapon button on a controller).
 - If you holster the expendable while carrying, the two can share one spot on your back.
+- One item is carried at a time: with your own support weapon already on your back, a second expendable replaces the first, as in the base game.
 - The TX-41 Sterilizer has no weapon-switch sound in the game, so it comes back without one.
 
 ## How it works

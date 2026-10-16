@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.0
+
+- New: with no support weapon of your own, a second expendable carries the first one (two EATs from one pod, an EAT and a Commando, the Solo Silo's remote and an EAT). It goes on your back, or the remote on its spot on your belt, and your support weapon key swaps back.
+- A carried item the game removes (like the Solo Silo's remote when its silo is gone) is now let go cleanly.
+- Joined games: a host that takes a few seconds to hand your weapon back is no longer logged as a failed swap.
+
 ## 1.0.1
 
 - Fixed: when the game's control settings listed your support weapon action with no keyboard or mouse key (for example, only a controller button set for it), the mod had no key to swap with. It now uses the default, 3.
