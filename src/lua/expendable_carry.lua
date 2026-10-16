@@ -22,7 +22,7 @@
 -- feet) and switch to it, with the weapon's own weapon-switch sound, the same calls the game makes when you pick a
 -- weapon up, minus the pickup itself. When the expendable is used up, your weapon goes back in your support slot the
 -- same way but stays on its sling (on your back) until you draw it.
-local VERSION = '1.1.0'
+local VERSION = '1.1.1'
 local VERBOSE = false          -- more details in the research log (off in the release)
 
 if rawget(_G, 'ChefExpendableCarry') then return end
@@ -1756,7 +1756,16 @@ carry_step = function(now)
   local sup = R.support
   if st.draw_at and now >= st.draw_at then st.draw_at = nil; draw_expendable(st) end
   if sup == st.x then
-    if R.held == 3 then st.in_hand = st.in_hand or now else st.in_hand = nil end
+    if R.held == 3 then st.in_hand, st.had = st.in_hand or now, true else st.in_hand = nil end
+    -- (1.1.1) a switch to your primary or secondary with the expendable in your hands drops it, and your weapon goes
+    -- back in your support slot on your back (the game would otherwise holster the expendable on your back too). Not
+    -- for a grenade or stratagem (the game returns to the expendable after the throw), not while a controller's switch
+    -- is bringing your weapon back, not in a joined game (your weapon isn't on your back there).
+    if st.had and (R.held == 1 or R.held == 2) and not st.pad_at and not st.remote then
+      st.wield = false
+      swap_back(st, string.format('you switched to your %s; the %s was dropped', R.held == 1 and 'primary' or 'secondary', wname(st.xt)), now)
+      return
+    end
     if pressed3 and st.in_hand and now - st.in_hand >= SWAP_HOLD then st.wield = true; swap_back(st, 'support key', now); return end
     -- (controller) the weapon switch pressed with the expendable in your hands: your weapon back once the game's own
     -- switch is under way; held into the weapon wheel: left to the wheel
