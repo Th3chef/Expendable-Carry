@@ -6,24 +6,36 @@
 
 **Download:** `Expendable-Carry-1.1.0.zip` from the [latest release](https://github.com/Th3chef/Expendable-Carry/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
 
-In the base game you only have one support weapon slot: pick up an EAT and the game drops your Railgun, Autocannon or machine gun on the ground. With this mod your own support weapon goes onto your back instead, exactly where the game holsters it, while the expendable is in your hands. When you're done, press your support weapon key: the expendable drops at your feet and your weapon is back in your hands, with its weapon-switch sound. Use the expendable up and your weapon stays on its sling until you draw it, like a real sling.
+## What it does
 
-## Features
+In the base game you have one support weapon slot. Pick up an EAT, or any other expendable, and the game drops your Railgun, Autocannon or machine gun on the ground, and you have to go back for it.
 
-- **Your weapon on your back:** the game's own attach puts it on its own holster spot, with its own position and angle, just as the game holsters it. No copies, no hiding: it's your real weapon.
-- **One key back:** with the expendable in your hands, press your support weapon key. The expendable is dropped (you can pick it up again later) and your weapon is drawn, with its own weapon-switch sound.
-- **Your own key:** the mod reads your support weapon key from the game's control settings (3 by default), so a rebound key works too. Typing it in the chat doesn't swap.
+With this mod your support weapon goes onto your back instead, and the expendable goes in your hands. When you're done with the expendable, press your support weapon key and your weapon is back in your hands.
+
+It's for using an expendable **for a moment** without losing your weapon. It is not a second support weapon slot or a backpack: you carry one extra item, and switching back drops the expendable.
+
+## How to use it
+
+1. **Pick up an expendable** (EAT-17, EAT-700, EAT-411 Leveller, MGX-42 Bullet Storm, MLS-4X Commando, or the Solo Silo's targeting remote). Your support weapon goes onto your back, where the game holsters it, and the expendable is in your hands.
+2. **Fire it.** When it's used up, your support weapon goes back to your support slot. It stays on your back until you draw it with your support weapon key, like any holstered weapon.
+3. **Or switch back early:** press your support weapon key (3 by default). The expendable is dropped at your feet, and you can pick it up again later. Your weapon is back in your hands, with its own weapon-switch sound.
+
+## Good to know
+
+- **One at a time:** switching back always drops the expendable; it doesn't stay with you. To use it again, pick it back up.
+- **Your own key:** the mod uses your support weapon key from the game's controls, so a key you changed works too. Typing it in the chat doesn't swap.
 - **Controllers:** a controller has no support weapon button, so tap your switch weapon button (Y / Triangle by default) with the expendable in hand. Holding it for the weapon wheel doesn't swap.
-- **Used up:** fire the last shot and your weapon goes back to your support slot, still on your back, until you draw it.
-- **Two at once:** with no support weapon of your own, pick up a second expendable while you hold one (two EATs from one pod, an EAT and a Commando, the Solo Silo's remote and an EAT) and the first one is carried the same way: on your back, or the remote on its spot on your belt. Your support weapon key swaps back.
-- **Drawn on pickup:** pick up an expendable with your primary or secondary out and the expendable goes into your hands.
-- **No range limit:** your weapon goes wherever you go, and comes back wherever you are.
-- **Safe while carried:** solo and when you host, nobody can pick your weapon up (players without the mod included), and its pickup prompt is off.
+- **Another weapon out:** if your primary or secondary is out when you pick up an expendable, the expendable goes into your hands.
+- **Two expendables, no support weapon (new in 1.1):** if you don't carry a support weapon of your own, say you run the Solo Silo and EATs, the expendable you're holding is carried the same way when you pick up a second one. The Solo Silo's remote goes on its own spot on your belt.
+- **Any support weapon:** every weapon that sits in the support slot can be carried.
+- **No range limit:** your weapon goes with you, and comes back wherever you are.
+- **Safe while carried:** solo and when you host, nobody can pick your carried weapon up, players without the mod included.
 - **Light:** a few hundredths of a millisecond a frame.
 
-## Expendables
+## Multiplayer
 
-EAT-17 Expendable Anti-Tank, EAT-700 Expendable Napalm, EAT-411 Leveller, MGX-42 Bullet Storm, MLS-4X Commando and the MS-11 Solo Silo's targeting remote. Every weapon that sits in the support slot can be carried, and with no support weapon of your own, so can an expendable when you pick up a second one.
+- **Solo and hosting:** everything above. Nobody else needs the mod.
+- **Joined games (someone else hosts):** the host's game owns your weapon once it's dropped, so it stays where it was dropped instead of going on your back. Your support weapon key still asks for it back from wherever you are, with the game's pickup animation. The host doesn't need the mod. Other players see it on their minimap, and a squadmate could pick it up (the mod then lets it go).
 
 ## Options
 
@@ -45,17 +57,13 @@ Disable it in your mod manager, then Purge and Deploy. Its log files stay in the
 ## Compatibility
 
 - A Bingus Shared Loader script: it doesn't replace any game files, so it works alongside other mods.
-- Solo and hosting: everything above. Nobody else needs the mod.
-- Joined games (someone else hosts): the host's game owns your weapon once it's set down, so it stays where it was set down. Your support weapon key asks the host's game for it back from wherever you are, with the game's pickup animation (the host doesn't need the mod).
 - Patch-proof by design: it finds what it needs in the game's code by itself after a game update. If something can't be found, it turns itself off (or just that part, like the switch sound) and says so in its log, rather than guessing.
 - Made and tested on the October 2026 game version.
 
 ## Known limitations
 
-- Joined games: your weapon lies where it was set down for everyone, so it shows on the other players' minimaps, and a squadmate could pick it up (the mod then lets it go).
-- Controllers: the switch weapon button brings your weapon back (there's no support weapon button on a controller).
 - If you holster the expendable while carrying, the two can share one spot on your back.
-- One item is carried at a time: with your own support weapon already on your back, a second expendable replaces the first, as in the base game.
+- With your own support weapon already on your back, a second expendable replaces the first, as in the base game.
 - The TX-41 Sterilizer has no weapon-switch sound in the game, so it comes back without one.
 
 ## How it works
