@@ -5,6 +5,9 @@
 -- it stays holstered on your back while the expendable is in your hands. Press your support weapon key with the
 -- expendable in hand and the expendable is dropped and your own weapon is back in your hands; use the expendable up and
 -- your weapon stays on its sling (on your back) until you draw it.
+-- (1.1.0) With no support weapon of your own, an expendable in your hands is carried the same way when you pick up a
+-- second one (two EATs from one pod, an EAT and a Commando, the Solo Silo's remote and an EAT): the first goes on
+-- your back (the remote on its own holster spot), and your support weapon key brings it back.
 -- Solo and when you host (your game runs the pickups): all of the above. In a joined game the host's game runs your
 -- pickups and owns your weapon once it is set down: it stays where it was set down, and the key asks the host's game
 -- for it back from wherever you are (the game's own pickup request; works with an unmodded host).
@@ -19,7 +22,7 @@
 -- feet) and switch to it, with the weapon's own weapon-switch sound, the same calls the game makes when you pick a
 -- weapon up, minus the pickup itself. When the expendable is used up, your weapon goes back in your support slot the
 -- same way but stays on its sling (on your back) until you draw it.
-local VERSION = '1.0.1'
+local VERSION = '1.1.0'
 local VERBOSE = false          -- more details in the research log (off in the release)
 
 if rawget(_G, 'ChefExpendableCarry') then return end
@@ -894,6 +897,10 @@ local function equip_step(now)
         keys[AVATAR_TYPE], keys[ew.type], keys[en.type] = 'your helldiver?', 'your ' .. wname(ew.type), 'the ' .. wname(en.type)
         R.lua_probe, R.probe_why, R.probe_keys = now + 1.0, 'after a swap', keys
       end
+    elseif n_exp and w_exp then
+      -- (1.1.0) an expendable over an expendable: carried too when nothing is carried yet (no support weapon of your
+      -- own); the carry decides, as it knows what is carried and what your key just brought back
+      R.carry_swap = { w = was, x = now_id, wt = ew.type, xt = en.type, at = now, second = true }
     elseif w_exp and (now_id == 0 or now_id == 0xFFFFFFFF) then
       rec(string.format('your %s left your hands (used up or dropped); support slot empty', wname(ew.type)))
     elseif w_exp and en then
@@ -916,6 +923,7 @@ local ENTRY, ENTRY_TYPE, ENTRY_ON = 0x68, 0x44, 0x60   -- an interaction in an i
 -- each weapon that can sit in the support slot, by entity type: its holster node and offsets (the weapon's own
 -- Equipment data: position in m, then rotation in degrees on x, y, z). From the game's data (Oct 2026 build).
 local HOLSTER = {
+  ['fc13460592ca79aa'] = { 'target_designator' },   -- Solo Silo Targeting Remote (its own holster node, no offsets)
   ['bf4cfd2aeabfb5a4'] = { 'support_mg', 0.05, -0.1, -0.2, -90, 0, 0 },   -- CQC-9 Defoliation Tool
   ['b0f1b354ba1d38d8'] = { 'support_mg', -0.05, 0.05, 0, 60, 5, 60 },   -- CQC-1 One True Flag
   ['5f3ec9bda2bd8553'] = { 'support_mg', 0.02, -0.22, -0.25, -100, 0, 0 },   -- CQC-20 Breaching Hammer
@@ -1016,7 +1024,6 @@ local function writable(addr, n)
   local base = tonumber(ffi.cast('uintptr_t', r.base))
   return r.state == 0x1000 and r.type == 0x20000 and r.protect == 0x04 and addr + n <= base + tonumber(r.size)
 end
-local HELD_AT = 28            -- equipment record +0x1C: the slot in your hands (1 primary, 2 secondary, 3 support, 5 throwable)
 local function write_u32(addr, v)
   if not writable(addr, 4) then return false end
   local b = ffi.new('uint32_t[1]', v)
@@ -1200,7 +1207,8 @@ end
 local ATTACH = ffi.typeof('void (*)(void *, uint32_t, uint32_t, uint32_t, const float *, const float *, float)')
 local DETACH = ffi.typeof('void (*)(void *, uint32_t, uint8_t, uint64_t)')
 local NODE_INDEX = ffi.typeof('uint32_t (*)(uint32_t, uint32_t)')
-local NODE_HASH = { support = 0xe80d437b, support_mg = 0x07fa5ada }   -- the holster nodes' names (thin hashes)
+local NODE_HASH = { support = 0xe80d437b, support_mg = 0x07fa5ada,     -- the holster nodes' names (thin hashes)
+  target_designator = 0x019cd5f2 }
 -- the position and rotation handed to the attach (the rotation on a 16-byte boundary: the game reads it in one aligned
 -- load). The buffer is used by game_attach itself, so it stays alive as long as the mod does (a buffer only pointed to
 -- by a cast would be freed by the garbage collector).
@@ -1268,9 +1276,15 @@ local function unstash(st, why)
   if st.remote then rec(string.format('carry (joined): your %s no longer carried (%s)', wname(st.wt), why)); return end
   local parts = {}
   if st.attached then
-    write_log_now()
-    local okd, e = pcall(game_detach, st.w)
-    parts[#parts + 1] = okd and e and 'detached' or ('could NOT be detached (' .. tostring(e) .. ')')
+    -- (1.1.0) only when it is still on your helldiver (a carried item the game destroyed, e.g. the Solo Silo's remote
+    -- when its silo is gone, may have had its id given to something else)
+    local to = attached_to(st.w)
+    if to ~= nil and to ~= st.pu then parts[#parts + 1] = string.format('not detached (no longer on your helldiver: %x)', to)
+    else
+      write_log_now()
+      local okd, e = pcall(game_detach, st.w)
+      parts[#parts + 1] = okd and e and 'detached' or ('could NOT be detached (' .. tostring(e) .. ')')
+    end
     st.attached = false
   end
   local e2, t = entry_of(st)
@@ -1286,10 +1300,9 @@ local function unstash(st, why)
   rec(string.format('carry: your %s off your back (%s): %s', wname(st.wt), why, table.concat(parts, ', ')))
 end
 
--- onto your back: the weapon's own holster node and offsets (the other holster node when the expendable's is the same,
--- so the two never sit in one spot when you holster the expendable)
+-- onto your back: the weapon's own holster node and offsets, the way the game holsters it
 local function put_on_back(st, why, quiet)
-  local h, hx = holster_of(st.wt), holster_of(st.xt)
+  local h = holster_of(st.wt)
   if not h then return 'no holster spot known for it' end
   if not G.att then return 'the game\'s attach was not found' end
   if not (R.av and R.avunit) then return 'no helldiver' end
@@ -1303,7 +1316,7 @@ local function put_on_back(st, why, quiet)
   local ok, ni, e = pcall(game_attach, st.w, R.avunit, node, h)
   if not ok then return 'attach error: ' .. tostring(ni) end
   if not ni then return tostring(e) end
-  st.attached, st.node = true, node
+  st.attached, st.node, st.pu = true, node, R.avunit
   local to = attached_to(st.w)
   st.verified = to == R.avunit
   return string.format('attached on %s (node %d) by the game%s', node, ni,
@@ -1382,6 +1395,10 @@ local function keep(st, now)
   end
   if now < st.next_check then return end
   st.next_check = now + 0.25
+  -- (1.1.0) still the same item: the game can destroy a carried one (the Solo Silo's remote when its silo is gone),
+  -- and its id can then go to something else
+  local ce = entity(st.w)
+  if not ce or ce.type ~= st.wt then st.entry = nil; return 'gone' end
   local entry, t = entry_of(st)
   if not entry then st.entry = nil; return 'gone' end
   st.entry = entry
@@ -1455,7 +1472,8 @@ local function swap_back(st, why, now)
     write_log_now()
     local ok, e = pcall(ask_host, st.w, st.which)
     if not ok then C.failed = C.failed + 1; event('joined game: the request failed: ' .. tostring(e)); return end
-    C.pending = { w = st.w, wt = st.wt, at = now, why = why .. '; asked the host', wield = st.wield == true }
+    C.pending = { w = st.w, wt = st.wt, at = now, why = why .. '; asked the host', wield = st.wield == true, remote = true }
+    C.back_swap = { w = st.w, x = st.x, at = now }
     return
   end
   local eqm = read_ptr(G.equipment)
@@ -1473,6 +1491,7 @@ local function swap_back(st, why, now)
   if not ok then C.failed = C.failed + 1; event('the game\'s equip failed: ' .. tostring(e)); return end
   if wr then play_switch(st.wt, st.w, st.wu) end
   C.pending = { w = st.w, wt = st.wt, at = now, why = why, wield = wr ~= nil, wr = wr }
+  C.back_swap = { w = st.w, x = st.x, at = now }
 end
 
 -- your support weapon key, the one you set in the game: Helldivers 2 keeps the bindings you changed in its input settings file in Steam Cloud
@@ -1700,12 +1719,26 @@ carry_step = function(now)
   end
   if R.carry_swap then
     local sw = R.carry_swap; R.carry_swap = nil
-    local ok, e = pcall(stash, sw, now)
-    if not ok then rec('carry: error while taking it onto your back: ' .. tostring(e)) end
+    local bk = C.back_swap
+    if sw.second and (C.stash or (bk and bk.w == sw.x and bk.x == sw.w)) then
+      -- something is carried already (the carry goes on below), or this is the swap your key just made (that exact
+      -- pair, however long the host takes): the one in your hands was only swapped
+      if not C.stash then rec(string.format('your %s was swapped for the %s', wname(sw.wt), wname(sw.xt))) end
+    else
+      if sw.second then
+        stats.swaps = stats.swaps + 1
+        rec(string.format('you picked up the %s; the game set your %s down (your only support item)', wname(sw.xt), wname(sw.wt)))
+      end
+      local ok, e = pcall(stash, sw, now)
+      if not ok then rec('carry: error while taking it onto your back: ' .. tostring(e)) end
+    end
   end
-  if C.pending and now - C.pending.at > 2 then
+  if C.back_swap and (R.support == C.back_swap.w or now - C.back_swap.at > 10) then C.back_swap = nil end
+  -- (1.1.0) back once it reached your support slot, even if you drop it again within the 2 s (X); a host gets 6 s
+  if C.pending and R.support == C.pending.w then C.pending.arrived = true end
+  if C.pending and now - C.pending.at > (C.pending.remote and 6 or 2) then
     local p = C.pending; C.pending = nil
-    if R.support == p.w then
+    if R.support == p.w or p.arrived then
       if p.why:find('used up', 1, true) then C.auto = C.auto + 1 else C.back = C.back + 1 end
       event(string.format(p.wield and 'your %s is back in your hands (%s; in hand now: slot %s)' or 'your %s is back in your support slot (%s; in hand now: slot %s)',
         wname(p.wt), p.why, tostring(R.held)))
@@ -1733,7 +1766,7 @@ carry_step = function(now)
       elseif now - st.pad_at >= PAD_DELAY then st.pad_at = nil; st.wield = true; swap_back(st, 'weapon switch on the controller', now) end
     end
   elseif sup == 0 or sup == 0xFFFFFFFF then
-    swap_back(st, 'the ' .. wname(st.xt) .. ' was used up; it stays on its sling', now)
+    swap_back(st, 'the ' .. wname(st.xt) .. ' was used up or dropped; it stays on its sling', now)
   else
     local e = entity(sup)
     if e and WEAPONS[e.type] and WEAPONS[e.type][2] then         -- another expendable (the pod's second EAT): keep carrying
