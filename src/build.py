@@ -11,7 +11,7 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, HERE)
 import patch_writer
 
-VERSION = '1.1.1'
+VERSION = '1.1.2'
 GUID_RELEASE = 'c8c1dd5a-ec87-4227-b67b-0ff28bc73feb'
 LUA = 0xa14e8dfa2cd117e2
 ADDON = 'mods/chef/expendable_carry'
