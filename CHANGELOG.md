@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0
+
+- New option: Swap, Don't Drop (off unless you tick it). Your support weapon key swaps what's in your hands and what's on your back instead of dropping the expendable: your support weapon and one expendable, or two expendables. Switching to your primary or secondary keeps the expendable on your back, and an expendable picked up with another weapon out isn't drawn. In joined games the key asks the host for the other item back. Also a toggle in Mod Options Menu.
+- The mod now has options in your mod manager: when you update, make sure Expendable Carry (required) is ticked.
+
 ## 1.1.2
 
 - Lighter: the mod now sleeps on the ship, in the menus and whenever nothing is in your support slot (one quick look 4 times a second). While it works it reads less, and nothing heavy happens on the frame you pick something up.
