@@ -13,8 +13,8 @@ FONTS = {'Anton': 'fonts/anton-latin-400-normal.woff2',
          'Barlow Condensed': 'fonts/barlow-condensed-latin-600-normal.woff2',
          'Barlow Condensed B': 'fonts/barlow-condensed-latin-800-normal.woff2'}
 
-TAGLINE = 'Keep your support weapon on your back'
-FEATURES = ['EAT-17 / 700 / 411', 'MGX-42', 'MLS-4X', 'SOLO SILO REMOTE', 'TWO AT ONCE', "SWAP, DON'T DROP"]
+TAGLINE = 'Carry both, swap with one key'
+FEATURES = ["SWAP, DON'T DROP", 'TWO AT ONCE', 'EAT-17 / 700 / 411', 'MGX-42', 'MLS-4X', 'SOLO SILO REMOTE']
 
 
 def b64(path_or_img):
