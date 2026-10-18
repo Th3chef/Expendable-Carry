@@ -11,6 +11,8 @@
 -- Solo and when you host (your game runs the pickups): all of the above. In a joined game the host's game runs your
 -- pickups and owns your weapon once it is set down: it stays where it was set down, and the key asks the host's game
 -- for it back from wherever you are (the game's own pickup request; works with an unmodded host).
+-- (1.2.0) Option Swap, Don't Drop (off by default): the key swaps the expendable in your hands and the item on your
+-- back instead of dropping the expendable (your support weapon and one expendable, or two expendables).
 -- (1.1.2) Idle on the ship, in the menus and whenever nothing is in your support slot: it only looks at your support slot
 -- 4 times a second and does nothing else until a support item is there.
 -- Finds everything it needs in the game's code by itself (no fixed addresses), so a game update doesn't break it;
@@ -24,7 +26,7 @@
 -- feet) and switch to it, with the weapon's own weapon-switch sound, the same calls the game makes when you pick a
 -- weapon up, minus the pickup itself. When the expendable is used up, your weapon goes back in your support slot the
 -- same way but stays on its sling (on your back) until you draw it.
-local VERSION = '1.1.2'
+local VERSION = '1.2.0'
 local VERBOSE = false          -- more details in the research log (off in the release)
 
 if rawget(_G, 'ChefExpendableCarry') then return end
@@ -1183,6 +1185,12 @@ local function v3(v)
   return nil
 end
 local C = { stash = nil, swaps = 0, back = 0, auto = 0, released = 0, joined = 0, failed = 0 }
+-- (1.2.0) Swap, Don't Drop (an option, off by default; its code calls it cycling): your support weapon key swaps the two items, the one in your hands
+-- going onto your back, instead of dropping the expendable. Two items at most: your support weapon and one expendable,
+-- or two expendables with no support weapon of your own. Switching to any other weapon keeps the expendable (the game
+-- holsters it). In a joined game the item put away lies where the host's game set it down and the key asks the host
+-- for it back. Ticked in the mod manager (its addon sets ChefExpendableCarryCycle); Mod Options Menu toggle in game.
+local CY = { on = false, ticked = false, cycles = 0 }
 -- the game's own routines (the same calls, in the same order, as its weapon pickup minus the pickup itself):
 -- set the support slot (it drops what the slot held), tell the other players' games, then the wield request (the
 -- weapon-switch animation and sound)
@@ -1371,13 +1379,15 @@ local function unstash(st, why)
 end
 
 -- onto your back: the weapon's own holster node and offsets, the way the game holsters it
-local function put_on_back(st, why, quiet)
+local function put_on_back(st, why, quiet, other)
   local h = HOLSTER[st.wt]
   if not h then return 'no holster spot known for it' end
+  if other then h = { other } end    -- ((1.2.0) the other back spot, no offsets: see keep())
   if not G.att then return 'the game\'s attach was not found' end
   if not (R.av and R.avunit) then return 'no helldiver' end
   -- always the weapon's own holster node and offsets, the way the game holsters it (another node's holster rotation
-  -- is made for other weapons and turns yours the wrong way). The expendable is in your hands, so the node is free.
+  -- is made for other weapons and turns yours the wrong way). The item in your support slot is usually in your hands,
+  -- so the node is free; when it isn't ((1.2.0) Swap, Don't Drop: the game holsters it), keep() moves this one aside.
   local node = h[1]
   if not quiet then
     rec(string.format('carry: attaching your %s (entity %x) to your helldiver (unit %x) on %s', wname(st.wt), st.w, R.avunit, node))
@@ -1412,18 +1422,27 @@ local function remote_stash(sw, now)
   if not G.interact then return skip('the game\'s interaction routine was not found') end
   if not R.av then return skip('no helldiver') end
   local _, which = pickup_entry(sw.w)
-  local st = { remote = true, w = sw.w, x = sw.x, wt = sw.wt, xt = sw.xt, since = now, next_check = 0,
+  local st = { remote = true, w = sw.w, x = sw.x, wt = sw.wt, xt = sw.xt, since = now, next_check = 0, grace_until = now + 1.5,
                which = type(which) == 'number' and which or nil, tries = 0 }
   C.stash = st
   C.joined = C.joined + 1
   rec(string.format('carry (joined): your %s (entity %x) set down by the host\'s game; its support pick-up: %s', wname(sw.wt), sw.w,
     st.which and ('interaction ' .. st.which) or ('not found yet (' .. tostring(which) .. ')')))
-  event(string.format('joined game: you picked up the %s; your %s lies where it was set down - your support weapon key asks the host for it back, from anywhere',
-    wname(sw.xt), wname(sw.wt)))
+  if sw.cycle then
+    CY.cycles = CY.cycles + 1
+    event(string.format('joined game, swapped: the %s in your hands; the %s lies where it was set down - your support weapon key asks the host for it back',
+      wname(sw.xt), wname(sw.wt)))
+  else
+    event(string.format('joined game: you picked up the %s; your %s lies where it was set down - your support weapon key asks the host for it back, from anywhere',
+      wname(sw.xt), wname(sw.wt)))
+  end
 end
 
 local function stash(sw, now)
-  local function skip(why) rec('carry: left alone - ' .. why); event('left your ' .. wname(sw.wt) .. ' where the game set it down: ' .. why) end
+  local function skip(why)
+    if sw.quiet then return end                                -- ((1.2.0) a cycle's early tries: retried next frame)
+    rec('carry: left alone - ' .. why); event('left your ' .. wname(sw.wt) .. ' where the game set it down: ' .. why)
+  end
   if R.req_t and now - R.req_t < JOINED_WINDOW then return remote_stash(sw, now) end
   local ew, ex = entity(sw.w), entity(sw.x)
   if not ew or bit.band(ew.flags, 3) ~= 1 then return skip('the weapon is not your game\'s') end
@@ -1445,10 +1464,18 @@ local function stash(sw, now)
   st.entry = entry
   parts[#parts + 1] = put_on_back(st)
   C.swaps = C.swaps + 1
-  if R.held ~= 3 then st.draw_at = now + DRAW_DELAY end         -- (picked up with another weapon in hand: drawn; solo and host only)
+  -- (picked up with another weapon in hand: drawn; solo and host only. (1.2.0) Not with Swap, Don't Drop on: the game holsters it and
+  -- your key draws it when you want it)
+  if R.held ~= 3 and not sw.cycle and not CY.on then st.draw_at = now + DRAW_DELAY end
   rec('carry: your ' .. wname(sw.wt) .. ' onto your back: ' .. table.concat(parts, ', '))
-  event(string.format('you picked up the %s; your %s is %s', wname(sw.xt), wname(sw.wt),
-    st.attached and 'on your back' or 'locked where it was set down (it could not be put on your back)'))
+  if sw.cycle then
+    CY.cycles = CY.cycles + 1
+    event(string.format('swapped: the %s in your hands, the %s %s', wname(sw.xt), wname(sw.wt),
+      st.attached and 'on your back' or 'locked where it was set down (it could not be put on your back)'))
+  else
+    event(string.format('you picked up the %s; your %s is %s', wname(sw.xt), wname(sw.wt),
+      st.attached and 'on your back' or 'locked where it was set down (it could not be put on your back)'))
+  end
 end
 
 -- while carried: its pick-up kept off (the game turns it on a moment after setting it down), and kept on your back
@@ -1456,12 +1483,32 @@ local function keep(st, now)
   if st.remote then
     if now < st.next_check then return end
     st.next_check = now + 0.25
-    if not interactable(st.w) then return 'gone' end
+    if not interactable(st.w) then
+      if now < (st.grace_until or 0) then return end   -- ((1.2.0) the host's set-down item may need a moment to show here)
+      return 'gone'
+    end
     if not st.which then local _, wh = pickup_entry(st.w); if type(wh) == 'number' then st.which = wh end end
     return
   end
   if st.entry and fetch(st.entry + ENTRY_ON, 1) and b8(0) ~= 0 then      -- (every frame: one byte)
     if write_u8(st.entry + ENTRY_ON, 0) then st.relit, st.off = (st.relit or 0) + 1, true end
+  end
+  -- (1.2.0) Swap, Don't Drop: with the item in your support slot not in your hands, the game holsters it; when it uses
+  -- the same spot as the carried one (EATs, the Autocannon, the Commando ... all use 'support'), the carried one is
+  -- moved to the other back spot until you draw the slot's item again. Table look-ups only; an attach only on a change.
+  if CY.on and st.attached and G.att and R.avunit then
+    local hw, hx = HOLSTER[st.wt], HOLSTER[st.xt]
+    local own = hw and hw[1]
+    local want = own
+    if R.held ~= 3 and hx and hx[1] == own and (own == 'support' or own == 'support_mg') then
+      want = own == 'support' and 'support_mg' or 'support'
+    end
+    if want ~= st.node and want ~= st.node_failed then
+      local r = put_on_back(st, want ~= own and ' (moved aside: the ' .. wname(st.xt) .. ' is holstered on ' .. own .. ')' or ' (back on its own spot)',
+        true, want ~= own and want or nil)
+      rec(string.format('carry: your %s %s', wname(st.wt), r))
+      st.node_failed = st.node ~= want and want or nil     -- (a failed move is not tried again every frame)
+    end
   end
   if now < st.next_check then return end
   st.next_check = now + 0.25
@@ -1535,6 +1582,8 @@ end
 -- back to your support weapon: the game's own equip (it drops the expendable at your feet) and weapon switch
 local function swap_back(st, why, now)
   C.stash = nil
+  local p0 = C.pending          -- ((1.2.0) cycling back within 2 s: the swap before is counted now, before it is replaced)
+  if p0 and p0.arrived then C.pending = nil; C.back = C.back + 1 end
   unstash(st, why)
   if st.remote then
     if not st.which then C.failed = C.failed + 1; event('joined game: could not ask for your ' .. wname(st.wt) .. ': its pick-up was not found'); return end
@@ -1542,7 +1591,8 @@ local function swap_back(st, why, now)
     write_log_now()
     local ok, e = pcall(ask_host, st.w, st.which)
     if not ok then C.failed = C.failed + 1; event('joined game: the request failed: ' .. tostring(e)); return end
-    C.pending = { w = st.w, wt = st.wt, at = now, why = why .. '; asked the host', wield = st.wield == true, remote = true }
+    C.pending = { w = st.w, wt = st.wt, at = now, why = why .. '; asked the host', wield = st.wield == true, remote = true,
+                  cyc = st.cycle and { w = st.x, wt = st.xt } or nil, st = st }
     C.back_swap = { w = st.w, x = st.x, at = now }
     return
   end
@@ -1560,7 +1610,8 @@ local function swap_back(st, why, now)
   local ok, e = pcall(game_equip, eqm, R.av, st.w, wr)
   if not ok then C.failed = C.failed + 1; event('the game\'s equip failed: ' .. tostring(e)); return end
   if wr then play_switch(st.wt, st.w, st.wu) end
-  C.pending = { w = st.w, wt = st.wt, at = now, why = why, wield = wr ~= nil, wr = wr }
+  C.pending = { w = st.w, wt = st.wt, at = now, why = why, wield = wr ~= nil, wr = wr, dropped = st.dropped,
+                cyc = st.cycle and { w = st.x, wt = st.xt } or nil }
   C.back_swap = { w = st.w, x = st.x, at = now }
 end
 
@@ -1762,7 +1813,7 @@ do
   -- every working frame: the bindings checked again every 15 s (not while carrying, not on a pickup's frame); while
   -- carrying, whether the chat is open (a few key checks: (1.1.2) only then, as nothing can be picked up while typing)
   keys_step = function(now)
-    if now >= KEYS.next_read and not C.stash and not R.carry_swap then keys_refresh(now) end
+    if now >= KEYS.next_read and not C.stash and not R.carry_swap and not C.pending then keys_refresh(now) end
     if not C.stash then return end
     local K = devices()
     if not K then return end
@@ -1793,6 +1844,20 @@ do
   end
 end
 
+-- (1.2.0) cycling: once the item your key brought back is in your support slot, the one the game set down for it is
+-- carried in its turn (on your back; in a joined game, where the host's game set it down). Its pick-up can take a
+-- frame or two to be found: tried for up to a second, quietly, then given up on with the reason in the log.
+local function cycle_stash(p, now)
+  local c = p.cyc
+  if not c.t0 and not p.remote and not entity(c.w) then        -- ((1.2.0) gone already: no retries, no table scans)
+    p.cyc = nil; rec('carry: the ' .. wname(c.wt) .. ' set down for the swap is gone'); return
+  end
+  c.t0 = c.t0 or now
+  local sw = { w = c.w, x = p.w, wt = c.wt, xt = p.wt, at = now, cycle = true, quiet = now - c.t0 < 1 }
+  local ok, e = pcall(p.remote and remote_stash or stash, sw, now)
+  if not ok then rec('carry: error while swapping: ' .. tostring(e)); session.dirty = true end
+  if C.stash or not ok or not sw.quiet then p.cyc = nil end
+end
 local PAD_WHEEL = 0.15        -- seconds: the weapon switch held this long is the game's weapon wheel (it opens at 0.2 s): no swap back
 local PAD_DELAY = 0.4         -- seconds after a weapon switch press before your weapon is brought back (the game's own
                               -- switch goes first; the same wait as drawing an expendable after a pickup)
@@ -1806,14 +1871,24 @@ carry_step = function(now)
   if R.carry_swap then
     local sw = R.carry_swap; R.carry_swap = nil
     local bk = C.back_swap
-    if sw.second and (C.stash or (bk and bk.w == sw.x and bk.x == sw.w)) then
+    local mine = bk and bk.w == sw.x and bk.x == sw.w
+    if (sw.second and C.stash) or mine then
       -- something is carried already (the carry goes on below), or this is the swap your key just made (that exact
-      -- pair, however long the host takes): the one in your hands was only swapped
+      -- pair, however long the host takes): the one in your hands was only swapped ((1.2.0) when cycling, the one the
+      -- game set down is carried below, as the swap's own step, not as a pickup)
+      if not sw.second then stats.swaps = stats.swaps - 1 end
       if not C.stash then rec(string.format('your %s was swapped for the %s', wname(sw.wt), wname(sw.xt))) end
     else
       if sw.second then
         stats.swaps = stats.swaps + 1
         rec(string.format('you picked up the %s; the game set your %s down (your only support item)', wname(sw.xt), wname(sw.wt)))
+      end
+      -- ((1.2.0) a new pickup while something is carried and in your hands is your support weapon (cycling): the carried
+      -- item is let go first, so two items at most)
+      if C.stash then
+        local old = C.stash; C.stash = nil; C.released = C.released + 1
+        unstash(old, 'you picked up the ' .. wname(sw.xt))
+        event(string.format('you picked up the %s: your %s was set down (two items at most)', wname(sw.xt), wname(old.wt)))
       end
       local ok, e = pcall(stash, sw, now)
       if not ok then rec('carry: error while taking it onto your back: ' .. tostring(e)); session.dirty = true end
@@ -1823,13 +1898,23 @@ carry_step = function(now)
   if C.back_swap and (R.support == C.back_swap.w or now - C.back_swap.at > 10) then C.back_swap = nil end
   -- (1.1.0) back once it reached your support slot, even if you drop it again within the 2 s (X); a host gets 6 s
   if C.pending and R.support == C.pending.w then C.pending.arrived = true end
+  if C.pending and C.pending.cyc and C.pending.arrived and not C.stash then
+    if CY.on then cycle_stash(C.pending, now) else C.pending.cyc = nil end   -- (turned off mid-swap: dropped, as without it)
+  end
   if C.pending and now - C.pending.at > (C.pending.remote and 6 or 2) then
     local p = C.pending; C.pending = nil
     if R.support == p.w or p.arrived then
-      if p.why:find('used up', 1, true) then C.auto = C.auto + 1 else C.back = C.back + 1 end
+      if p.dropped then elseif p.why:find('used up', 1, true) then C.auto = C.auto + 1 else C.back = C.back + 1 end
       event(string.format(p.wield and 'your %s is back in your hands (%s; in hand now: slot %s)' or 'your %s is back in your support slot (%s; in hand now: slot %s)',
         wname(p.wt), p.why, tostring(R.held)))
-    else C.failed = C.failed + 1; event(string.format('your %s did not come back (support slot %s)', wname(p.wt), describe(R.support or 0))) end
+    else
+      C.failed = C.failed + 1; event(string.format('your %s did not come back (support slot %s)', wname(p.wt), describe(R.support or 0)))
+      -- ((1.2.0) a host that never answered: the item still lies where it was; your key asks again)
+      if p.remote and p.st and not C.stash and R.av then
+        C.stash = p.st; p.st.next_check, p.st.grace_until = 0, now + 1.5
+        rec('carry (joined): the host did not answer; your key asks again')
+      end
+    end
   end
   local st = C.stash
   if not st then return end
@@ -1841,6 +1926,14 @@ carry_step = function(now)
     return
   end
   local sup = R.support
+  -- (1.2.0) cycling turned off in the menu while an expendable is carried and your support weapon is in your slot:
+  -- the expendable is let go (the key would otherwise give it back and drop your support weapon)
+  if not CY.on and WEAPONS[st.wt] and WEAPONS[st.wt][2] and not (WEAPONS[st.xt] and WEAPONS[st.xt][2]) then
+    C.stash = nil; C.released = C.released + 1
+    unstash(st, "Swap, Don't Drop turned off")
+    event(string.format("Swap, Don't Drop turned off: your %s was set down", wname(st.wt)))
+    return
+  end
   if st.draw_at and now >= st.draw_at then st.draw_at = nil; draw_expendable(st) end
   if sup == st.x then
     if R.held == 3 then st.in_hand, st.had = st.in_hand or now, true else st.in_hand = nil end
@@ -1848,24 +1941,35 @@ carry_step = function(now)
     -- back in your support slot on your back (the game would otherwise holster the expendable on your back too). Not
     -- for a grenade or stratagem (the game returns to the expendable after the throw), not while a controller's switch
     -- is bringing your weapon back, not in a joined game (your weapon isn't on your back there).
-    if st.had and (R.held == 1 or R.held == 2) and not st.pad_at and not st.remote then
+    -- (1.2.0) with Swap, Don't Drop on, kept: the game holsters it, and the key draws it again.
+    if st.had and (R.held == 1 or R.held == 2) and not st.pad_at and not st.remote and not CY.on then
       st.wield = false
       swap_back(st, string.format('you switched to your %s; the %s was dropped', R.held == 1 and 'primary' or 'secondary', wname(st.xt)), now)
       return
     end
-    if pressed3 and st.in_hand and now - st.in_hand >= SWAP_HOLD then st.wield = true; swap_back(st, 'support key', now); return end
+    if pressed3 and st.in_hand and now - st.in_hand >= SWAP_HOLD then st.wield, st.cycle = true, CY.on; swap_back(st, 'support key', now); return end
     -- (controller) the weapon switch pressed with the expendable in your hands: your weapon back once the game's own
     -- switch is under way; held into the weapon wheel: left to the wheel
     if pad_pressed and st.in_hand and now - st.in_hand >= SWAP_HOLD and not st.pad_at then st.pad_at = now end
     if st.pad_at then
       if pad_held and now - st.pad_at > PAD_WHEEL then st.pad_at = nil
-      elseif now - st.pad_at >= PAD_DELAY then st.pad_at = nil; st.wield = true; swap_back(st, 'weapon switch on the controller', now) end
+      elseif now - st.pad_at >= PAD_DELAY then st.pad_at = nil; st.wield, st.cycle = true, CY.on; swap_back(st, 'weapon switch on the controller', now) end
     end
   elseif sup == 0 or sup == 0xFFFFFFFF then
-    swap_back(st, 'the ' .. wname(st.xt) .. ' was used up or dropped; it stays on its sling', now)
+    if WEAPONS[st.xt] and WEAPONS[st.xt][2] then
+      swap_back(st, 'the ' .. wname(st.xt) .. ' was used up or dropped; it stays on its sling', now)
+    else                                              -- ((1.2.0) Swap, Don't Drop: your support weapon dropped (X))
+      st.dropped = true
+      swap_back(st, 'your ' .. wname(st.xt) .. ' was dropped; the ' .. wname(st.wt) .. ' goes back in your support slot', now)
+    end
   else
     local e = entity(sup)
     if e and WEAPONS[e.type] and WEAPONS[e.type][2] then         -- another expendable (the pod's second EAT): keep carrying
+      rec(string.format('carry: the %s replaced the %s; your %s is still carried', wname(e.type), wname(st.xt), wname(st.wt)))
+      st.x, st.xt, st.in_hand = sup, e.type, nil
+    elseif CY.on and e and WEAPONS[e.type] and WEAPONS[st.wt] and WEAPONS[st.wt][2] then
+      -- (1.2.0) cycling, an expendable carried: another support weapon picked up over yours (the game set yours down):
+      -- your expendable stays carried with the new support weapon
       rec(string.format('carry: the %s replaced the %s; your %s is still carried', wname(e.type), wname(st.xt), wname(st.wt)))
       st.x, st.xt, st.in_hand = sup, e.type, nil
     elseif sup == st.w then C.stash = nil; unstash(st, 'the game gave it back by itself')
@@ -1978,6 +2082,8 @@ local function write_log()
   for _, n in ipairs(session.notes) do f:write(n, '\n') end
   if KEYS.text then f:write('support weapon key: ', KEYS.text, '\n') end
   f:write('status: ', tostring(EC.status), '\n')
+  f:write(string.format("Swap, Don't Drop: %s (mod manager: %s; options menu: %s); swapped %d time(s)\n", CY.on and 'on' or 'off',
+    CY.ticked and 'ticked' or 'not ticked', tostring(CY.menu or 'not looked for yet'), CY.cycles))
   local idle_s = stats.idle_s + (stats.idle_since and (os.clock() - stats.idle_since) or 0)
   f:write(string.format('now: %s; idle %.0f s so far (no helldiver of yours, or nothing in your support slot: menus, the ship); working frames %d of %d\n',
     R.idle == nil and 'starting' or R.idle and 'idle' or 'working', idle_s, stats.work_frames, stats.frames))
@@ -1993,6 +2099,25 @@ end
 -- (1.1.2) right before a call into the game: the research log is flushed (a crash leaves its trace there); the main
 -- log is rewritten by the next second's check (it was rewritten in full here, 2 to 4 times on a pickup's frame)
 write_log_now = function() session.dirty = true; pcall(flush_rec) end
+-- (1.2.0) the Cycle option: ticked in the mod manager (its addon sets the flag), and a toggle in Mod Options Menu's
+-- MODS tab when that mod is installed (looked for once, at start-up: by then every addon has loaded; no polling)
+-- (the option's text: build.py reads this line for the mod manager's option description too)
+local CYCLE_TEXT = "Your support weapon key swaps what's in your hands with what's on your back, instead of dropping the expendable. Two items at most: your support weapon and one expendable, or two expendables."
+function CY.link()
+  CY.ticked = rawget(_G, 'ChefExpendableCarryCycle') == true
+  CY.on = CY.ticked
+  CY.menu = 'not installed (the mod manager\'s pick counts)'
+  local M = rawget(_G, 'ModOptionsMenu')
+  if type(M) ~= 'table' or type(M.register_option) ~= 'function' then return end
+  local id = 'expendable_carry.cycle.' .. (CY.ticked and 'on' or 'off')
+  local ok, e = pcall(M.register_option, id, { type = 'toggle', label = "Swap, Don't Drop", mod = 'EXPENDABLE CARRY',
+    default = CY.ticked, description = CYCLE_TEXT })
+  if not ok then CY.menu = 'could not add the toggle (' .. tostring(e) .. ')'; return end
+  local okg, v = pcall(M.get, id)
+  if okg and type(v) == 'boolean' then CY.on = v end
+  pcall(M.on_change, id, function(val) CY.on = val == true; event("Swap, Don't Drop: " .. (CY.on and 'on' or 'off') .. ' (Mod Options Menu)') end)
+  CY.menu = 'toggle in the MODS tab (EXPENDABLE CARRY)'
+end
 local started, broken, next_log, last_error = false, false, 0, nil
 local function start()
   if started then return end
@@ -2000,6 +2125,7 @@ local function start()
   local ok, e = pcall(resolve)
   if not ok then broken = true; EC.status = 'off: could not find what it needs in the game code (' .. tostring(e) .. ')'; write_log(); return end
   EC.status = 'on (solo and hosting: on your back; joined games: the key asks the host for your weapon)'
+  pcall(CY.link)
   if VERBOSE then pcall(lua_probe, 'start', { [AVATAR_TYPE] = 'helldiver' }) end
   write_log()
 end
