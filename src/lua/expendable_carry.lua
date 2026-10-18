@@ -970,6 +970,11 @@ local function equip_step(now)
       -- (1.1.0) an expendable over an expendable: carried too when nothing is carried yet (no support weapon of your
       -- own); the carry decides, as it knows what is carried and what your key just brought back
       R.carry_swap = { w = was, x = now_id, wt = ew.type, xt = en.type, at = now, second = true }
+    elseif w_exp and en and WEAPONS[en.type] then
+      -- (1.2.0) a support weapon picked up over the expendable in your hands (the game set the expendable down): with
+      -- Swap, Don't Drop on, the expendable is the one carried; the carry decides (option off: dropped, as before)
+      R.carry_swap = { w = was, x = now_id, wt = ew.type, xt = en.type, at = now, keep = true }
+      rec(string.format('your %s was swapped for the %s', wname(ew.type), wname(en.type)))
     elseif w_exp and (now_id == 0 or now_id == 0xFFFFFFFF) then
       rec(string.format('your %s left your hands (used up or dropped); support slot empty', wname(ew.type)))
     elseif w_exp and en then
@@ -1445,8 +1450,8 @@ local function stash(sw, now)
   end
   if R.req_t and now - R.req_t < JOINED_WINDOW then return remote_stash(sw, now) end
   local ew, ex = entity(sw.w), entity(sw.x)
-  if not ew or bit.band(ew.flags, 3) ~= 1 then return skip('the weapon is not your game\'s') end
-  if not ex or bit.band(ex.flags, 3) ~= 1 then return skip('the expendable is not your game\'s') end
+  if not ew or bit.band(ew.flags, 3) ~= 1 then return skip('the item set down is not your game\'s') end
+  if not ex or bit.band(ex.flags, 3) ~= 1 then return skip('the item in your hands is not your game\'s') end
   local entry, which = pickup_entry(sw.w)
   if not entry then return skip('its pick-up was not found (' .. tostring(which) .. ')') end
   if C.pending and C.pending.w == sw.w then          -- (it came back and was set down again before the 2 s check)
@@ -1872,19 +1877,23 @@ carry_step = function(now)
     local sw = R.carry_swap; R.carry_swap = nil
     local bk = C.back_swap
     local mine = bk and bk.w == sw.x and bk.x == sw.w
-    if (sw.second and C.stash) or mine then
+    local cs = C.stash
+    if sw.keep and not mine and (not CY.on or (cs and WEAPONS[cs.wt] and WEAPONS[cs.wt][2])) then
+      -- ((1.2.0) a support weapon over the expendable in your hands: option off, the expendable stays dropped; an
+      -- expendable already carried stays the carried one, with the new weapon (below))
+    elseif (sw.second and C.stash) or mine then
       -- something is carried already (the carry goes on below), or this is the swap your key just made (that exact
       -- pair, however long the host takes): the one in your hands was only swapped ((1.2.0) when cycling, the one the
       -- game set down is carried below, as the swap's own step, not as a pickup)
-      if not sw.second then stats.swaps = stats.swaps - 1 end
-      if not C.stash then rec(string.format('your %s was swapped for the %s', wname(sw.wt), wname(sw.xt))) end
+      if not sw.second and not sw.keep then stats.swaps = stats.swaps - 1 end
+      if not C.stash and not sw.keep then rec(string.format('your %s was swapped for the %s', wname(sw.wt), wname(sw.xt))) end
     else
-      if sw.second then
+      if sw.second then          -- ((1.2.0) a support weapon over the expendable (keep) is not an expendable pickup: not counted)
         stats.swaps = stats.swaps + 1
         rec(string.format('you picked up the %s; the game set your %s down (your only support item)', wname(sw.xt), wname(sw.wt)))
       end
-      -- ((1.2.0) a new pickup while something is carried and in your hands is your support weapon (cycling): the carried
-      -- item is let go first, so two items at most)
+      -- ((1.2.0) a new pickup while something is carried (cycling: your support weapon in your hands, or a support weapon
+      -- picked up over the expendable in your hands): the carried item is let go first, so two items at most)
       if C.stash then
         local old = C.stash; C.stash = nil; C.released = C.released + 1
         unstash(old, 'you picked up the ' .. wname(sw.xt))
@@ -2089,8 +2098,9 @@ local function write_log()
     R.idle == nil and 'starting' or R.idle and 'idle' or 'working', idle_s, stats.work_frames, stats.frames))
   f:write(string.format('carried on your back: %d; swapped back with the key: %d; after the expendable was used up: %d; set down (other weapon, death): %d; joined games (asked the host): %d; failed: %d\n',
     C.swaps, C.back, C.auto, C.released, C.joined, C.failed))
-  f:write(string.format('expendable pickups seen: %d; cost %.4f ms a frame on average (slowest %.2f ms); memory reads %d (failed %d)\n',
-    stats.swaps, stats.frames > 0 and stats.ms / stats.frames or 0, stats.worst_ms, stats.reads, stats.read_fails))
+  f:write(string.format('expendable pickups seen: %d; cost %.4f ms a frame on average (slowest %.2f ms%s); memory reads %d (failed %d)\n',
+    stats.swaps, stats.frames > 0 and stats.ms / stats.frames or 0, stats.worst_ms,
+    stats.worst_at and (' at ' .. stats.worst_at .. ', ' .. stats.worst_what) or '', stats.reads, stats.read_fails))
   f:write('details: ExpendableCarry.research.log\nrecent events:\n')
   for _, e in ipairs(session.events) do f:write('  ', e, '\n') end
   f:close()
@@ -2139,13 +2149,18 @@ local function tick()
   local now = os.clock()
   local ok, e = pcall(frame, now)
   if not ok and e ~= last_error then last_error = e; rec('read error: ' .. tostring(e)) end
+  local wrote
   if now >= next_log then
-    next_log = now + 1
+    next_log, wrote = now + 1, true
     if session.dirty or now >= session.full_at then write_log() else flush_rec() end
   end
   local ms = (os.clock() - now) * 1000          -- ((1.1.2) the log writing counted too)
   stats.frames, stats.ms = stats.frames + 1, stats.ms + ms
-  if ms > stats.worst_ms and stats.frames > 60 then stats.worst_ms = ms end
+  if ms > stats.worst_ms and stats.frames > 60 then
+    -- ((1.2.0) when, and what the mod was doing: the timer is wall time, so a frame the game paused counts too)
+    stats.worst_ms, stats.worst_at = ms, os.date('%H:%M:%S')
+    stats.worst_what = (wrote and 'writing the log, ' or '') .. (R.idle and 'idle' or C.stash and 'carrying' or C.pending and 'swapping back' or 'working')
+  end
 end
 
 local game_update, game_shutdown = rawget(_G, 'update'), rawget(_G, 'shutdown')
