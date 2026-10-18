@@ -11,6 +11,8 @@
 -- Solo and when you host (your game runs the pickups): all of the above. In a joined game the host's game runs your
 -- pickups and owns your weapon once it is set down: it stays where it was set down, and the key asks the host's game
 -- for it back from wherever you are (the game's own pickup request; works with an unmodded host).
+-- (1.1.2) Idle on the ship, in the menus and whenever nothing is in your support slot: it only looks at your support slot
+-- 4 times a second and does nothing else until a support item is there.
 -- Finds everything it needs in the game's code by itself (no fixed addresses), so a game update doesn't break it;
 -- if something can't be found, it stays off and says why in its log.
 --
@@ -22,7 +24,7 @@
 -- feet) and switch to it, with the weapon's own weapon-switch sound, the same calls the game makes when you pick a
 -- weapon up, minus the pickup itself. When the expendable is used up, your weapon goes back in your support slot the
 -- same way but stays on its sling (on your back) until you draw it.
-local VERSION = '1.1.1'
+local VERSION = '1.1.2'
 local VERBOSE = false          -- more details in the research log (off in the release)
 
 if rawget(_G, 'ChefExpendableCarry') then return end
@@ -125,7 +127,7 @@ if LOGDIR then                          -- each session starts fresh logs; the p
   end
 end
 local T0 = os.clock()
-local session = { started = os.date('%Y-%m-%d %H:%M:%S'), events = {}, notes = {} }
+local session = { started = os.date('%Y-%m-%d %H:%M:%S'), events = {}, notes = {}, dirty = true, full_at = 0 }
 local rec_lines = {}
 -- the research log is written as it goes (appended every second), so a crash or a quit never loses it
 local function rec(msg) rec_lines[#rec_lines + 1] = string.format('%s %8.2f  %s', os.date('%H:%M:%S'), os.clock() - T0, msg) end
@@ -133,10 +135,11 @@ local function event(msg)
   local e = session.events
   e[#e + 1] = os.date('%H:%M:%S ') .. msg
   if #e > 60 then table.remove(e, 1) end
+  session.dirty = true
   rec('** ' .. msg)
 end
-local function note(key, msg) session.notes[#session.notes + 1] = key .. ': ' .. msg end
-local stats = { reads = 0, read_fails = 0, frames = 0, swaps = 0, ms = 0, worst_ms = 0 }
+local function note(key, msg) session.notes[#session.notes + 1] = key .. ': ' .. msg; session.dirty = true end
+local stats = { reads = 0, read_fails = 0, frames = 0, swaps = 0, ms = 0, worst_ms = 0, work_frames = 0, idle_s = 0 }
 
 -- ======================================================================================================
 -- Memory: ReadProcessMemory on our own process into one reusable buffer (a bad address fails cleanly)
@@ -515,16 +518,19 @@ end
 -- The entity map is NOT keyed by the id the rows hold (your helldiver: players block a4, row id fb), so
 -- an id is found by its row: remembered per id, checked on every use, else all rows are read once (48 KB).
 local row_of = {}
+local miss_until, misses = {}, 0          -- (1.1.2) ids not found: not searched again for 2 s (each search reads 48 KB)
 local function row_at(e)
   local ob = read_ptr(G.owners); if not ob or e >= G.owner_count then return nil end
   local s = read_string(ob + G.owner_rows + e * 24, 24)
   if not s then return nil end
   return { type = type_hex(s, 0), rid = su32(s, 8), unit = su32(s, 12), flags = s:byte(21), raw = s, row = e }
 end
-local function entity(id)
+local function entity(id, cached)    -- (cached: may be answered from the remembered misses; only for log text)
   if id == 0 or id == 0xFFFFFFFF then return nil end
   local e = row_of[id]
   if e then local r = row_at(e); if r and r.rid == id then return r end; row_of[id] = nil end
+  local mu = miss_until[id]
+  if mu and cached and os.clock() < mu then return nil end
   local ob = read_ptr(G.owners); if not ob then return nil end
   local n = G.owner_count
   local all = read_string(ob + G.owner_rows, n * 24)
@@ -537,7 +543,13 @@ local function entity(id)
     end
   end
   local k = mine or first
-  if not k then return nil end
+  if not k then
+    if misses > 256 then miss_until, misses = {}, 0 end
+    if not mu then misses = misses + 1 end
+    miss_until[id] = os.clock() + 2
+    return nil
+  end
+  miss_until[id] = nil
   row_of[id] = k
   return row_at(k)
 end
@@ -556,7 +568,7 @@ local function wname(t)
 end
 local function describe(id)
   if id == 0 or id == 0xFFFFFFFF then return 'none' end
-  local e = entity(id)
+  local e = entity(id, true)
   if not e then return string.format('%x (no entity row)', id) end
   return string.format('%x %s (unit %x, flags %02x%s)', id, wname(e.type), e.unit, e.flags,
     bit.band(e.flags, 3) == 1 and ', ours' or '')
@@ -574,20 +586,43 @@ local function unit_position(unit)
   if not x or not y or not z or math.abs(x) > 1e5 or math.abs(y) > 1e5 or math.abs(z) > 1e5 then return nil end
   return x, y, z
 end
-local function avatar()
-  local pl = read_ptr(G.players); if not pl then return nil end
-  if not fetch(pl + 132, 8) then return nil end                 -- +132 players in the game, +136 local players
-  if b32(0) == 0 or b32(4) == 0 or b32(0) > 4 then return nil end
-  local a = read_u32(pl + 936)                                   -- +936 your helldiver's handle
+-- (1.1.2) the players block and the equipment manager pointers: one read when the two globals are close together in
+-- the game's data (they are, about 2 KB apart); two separate reads if a game update moves them apart
+local GP = nil
+local function game_ptrs()
+  if GP == nil then
+    local lo, hi = math.min(G.players, G.equipment), math.max(G.players, G.equipment)
+    GP = (hi - lo <= 4096) and { lo = lo, n = hi - lo + 8, po = G.players - lo, eo = G.equipment - lo } or false
+  end
+  if GP then
+    if not fetch(GP.lo, GP.n) then return nil, nil end
+    return bptr(GP.po), bptr(GP.eo)
+  end
+  return read_ptr(G.players), read_ptr(G.equipment)
+end
+local function avatar(pl)
+  if not pl then return nil end
+  if not fetch(pl + 132, 808) then return nil end               -- (1.1.2) one read: +132 players in the game,
+  if b32(0) == 0 or b32(4) == 0 or b32(0) > 4 then return nil end   -- +136 local players, +936 your helldiver's handle
+  local a = b32(804)
   if a == 0 or a == 32767 or a == 0xFFFFFFFF then return nil end
   return a
 end
-local function equip_addr(av)
-  local eq = read_ptr(G.equipment); if not eq then return nil end
-  local q = map_get(eq + 40, av, 8192)
-  if not q or q >= 4096 then return nil end
+-- your equipment record. (1.1.2) Its place in the records (q) is looked up in the game's map once a second (every 5 s
+-- while idle) and kept in between, but looked up again on every frame while something is carried or on its way back,
+-- and whenever the record changed (so a record moved when a player leaves can never pass for yours): 2 reads a frame
+-- instead of 5 or more.
+local EQ = { q = nil, mgr = nil, av = nil, until_t = 0 }
+local function equip_addr(av, now, fresh, eq, keep_s)
+  if not eq then EQ.q = nil; return nil end
+  local kept = not (fresh or not EQ.q or EQ.mgr ~= eq or EQ.av ~= av or now >= EQ.until_t)
+  if not kept then
+    local q = map_get(eq + 40, av, 8192)
+    if not q or q >= 4096 then EQ.q = nil; return nil end
+    EQ.q, EQ.mgr, EQ.av, EQ.until_t = q, eq, av, now + (keep_s or 1)
+  end
   local recs = read_ptr(eq + 80)
-  return recs and recs + q * 48 or nil
+  return recs and recs + EQ.q * 48 or nil, kept
 end
 local function state_addr(av)
   local sm = read_ptr(G.state); if not sm then return nil end
@@ -622,18 +657,18 @@ local function interactable_record(eid)
 end
 
 -- ======================================================================================================
--- Research: what happens around a pickup
+-- State (your helldiver, your equipment) and the research around a pickup (research builds)
 -- ======================================================================================================
-local R = { av = nil, eq = nil, last_eq = nil, watch = {}, snaps = {}, keys_ok = nil, lua_probe = nil,
+local R = { av = nil, eq = nil, last_eq = nil, watch = {}, lua_probe = nil,
             inter_last = nil, inter_req = nil, next_watch = 0, last_press = nil, last_press_t = 0, press_repeat = 0 }
 
 -- differences between two equal-length strings, by 4-byte words ('+off: old -> new'); a word that keeps changing
 -- (more than BUSY times under the same key) is left out of later lines and counted, so a timer can't flood the log
 local BUSY = 12
-local busy = {}
+local busy_words = {}
 local function diff(a, b, max, key)
-  local bk = key and busy[key]
-  if key and not bk then bk = {}; busy[key] = bk end
+  local bk = key and busy_words[key]
+  if key and not bk then bk = {}; busy_words[key] = bk end
   local out, quiet = {}, 0
   for o = 0, math.min(#a, #b) - 4, 4 do
     if a:sub(o + 1, o + 4) ~= b:sub(o + 1, o + 4) then
@@ -649,9 +684,14 @@ local function diff(a, b, max, key)
   return table.concat(out, '; '), #out - (quiet > 0 and 1 or 0)
 end
 
-local function slots_text(s)
+-- what each slot holds; with the record before a change, only the slots that changed (and the support slot), so a
+-- change never looks up every slot's entity
+local function slots_text(s, old)
   local t = {}
-  for k = 0, 5 do t[#t + 1] = SLOT_NAMES[k] .. ' ' .. describe(su32(s, 4 * k)) end
+  for k = 0, 5 do
+    local v = su32(s, 4 * k)
+    if not old or k == 2 or su32(old, 4 * k) ~= v then t[#t + 1] = SLOT_NAMES[k] .. ' ' .. describe(v) end
+  end
   return table.concat(t, ' | ')
 end
 
@@ -659,7 +699,7 @@ end
 local function start_watch(id, reason)
   local w0 = R.watch[id]
   if w0 then w0.since = os.clock(); rec(string.format('watch %x (%s): %s (watched again)', id, wname(w0.type), reason)); return end
-  local e = entity(id)
+  local e = entity(id, true)
   R.next_watch = 0
   R.watch[id] = { id = id, since = os.clock(), unit = e and e.unit, type = e and e.type, last = nil, irec = nil, ien = nil }
   rec(string.format('watch %x (%s): %s', id, wname(e and e.type), reason))
@@ -673,8 +713,10 @@ local function watch_step(now)
   if R.avunit then mx, my, mz = unit_position(R.avunit) end
   for id, w in pairs(R.watch) do
     if now - w.since > WATCH_SECONDS and R.support ~= id then R.watch[id] = nil; rec(string.format('watch %x: stopped after %d s', id, WATCH_SECONDS))
+    elseif R.support == id and not R.busy and now - w.since > 5 then
+      R.watch[id] = nil; rec(string.format('watch %x: in your support slot, nothing carried - stopped', id))   -- (1.1.2)
     else
-      local e = entity(id)
+      local e = entity(id, true)
       local x, y, z
       if e then x, y, z = unit_position(e.unit) end
       local dist = (x and mx) and math.sqrt((x - mx) ^ 2 + (y - my) ^ 2 + (z - mz) ^ 2) or nil
@@ -774,7 +816,8 @@ local function input_step(now)
   rec('pressed: ' .. txt)
 end
 
--- the engine side (asked once, then once after each swap): which functions exist, what units look like
+-- the engine side (research builds: at start-up, a few seconds after each helldiver appears, and after each swap): which
+-- functions exist, what units look like
 local function lua_probe(why, wanted)
   local SR = rawget(_G, 'stingray') or _G
   local W, U = SR.World or rawget(_G, 'World'), SR.Unit or rawget(_G, 'Unit')
@@ -841,45 +884,69 @@ local function lua_probe(why, wanted)
   end
 end
 
--- your equipment record, every frame: a change is logged with what each slot holds; a support weapon that leaves
--- the support slot for an expendable is followed
+-- your equipment record (every frame while working, 4 times a second while idle): a change is logged with what
+-- changed; a support weapon that leaves the support slot for an expendable is carried
+local HELD_AT = 28            -- equipment record +0x1C: the slot in your hands (1 primary, 2 secondary, 3 support, 5 throwable)
+local SPAWN_WORK = 3          -- seconds after your helldiver appears: the one-off work (your keys, the joined-game check)
 local function equip_step(now)
-  local h = avatar()
+  local pl, eqm = game_ptrs()
+  local h = avatar(pl)
   if h ~= R.avh then
-    R.avh, R.av, R.avunit, R.eq, R.last_eq = h, nil, nil, nil, nil
-    if not h then rec('no helldiver of yours (ship, menus, or dead)'); return end
+    -- (1.1.2) the old helldiver's slots are forgotten too, and a helldiver whose entity row isn't there yet (the game
+    -- still setting it up) is looked at again on the next look, not given up on for its whole life
+    R.av, R.avunit, R.eq, R.last_eq, R.support, R.held, R.req_at = nil, nil, nil, nil, nil, nil, nil
+    R.avh = nil
+    if not h then
+      if R.av_seen then rec('your helldiver is gone (menus, loading, or dead)'); R.av_seen = nil end
+      return
+    end
     local me = avatar_row(h)
-    if not me then rec(string.format('your helldiver: handle %x has no entity row', h)); return end
+    if not me then
+      if R.av_fail ~= h then R.av_fail = h; rec(string.format('your helldiver: handle %x has no entity row yet', h)) end
+      return
+    end
+    R.avh, R.av_fail, R.av_seen = h, nil, true
     R.av, R.avunit = me.rid, me.unit
     rec(string.format('your helldiver: handle %x -> entity %s', h, describe(me.rid)))
-    -- the engine side once per helldiver: its unit and nodes (and your weapons', added when the equipment is read)
-    if VERBOSE then R.lua_probe, R.probe_keys = now + 3, { [AVATAR_TYPE] = 'your helldiver?' } end
-    R.probe_why = 'your helldiver'
+    -- (1.1.2) the one-off work a little after your helldiver appears, while the mod is still idle: never on the frame
+    -- of a pickup (reading the keys on the frame your support weapon reached its slot made an 11 ms frame)
+    R.spawn_at = now + SPAWN_WORK
+    if VERBOSE then R.probe_keys = { [AVATAR_TYPE] = 'your helldiver?' } end
     if me.type ~= AVATAR_TYPE or bit.band(me.flags, 3) ~= 1 then
       rec(string.format('  (not a helldiver of yours: type %s flags %02x)', me.type, me.flags)); R.av = nil
     end
   end
   local av = R.av
   if not av then return end
-  local ea = equip_addr(av)
+  local ea, kept = equip_addr(av, now, R.busy, eqm, R.idle and 5 or 1)
   if not ea then if R.eq ~= false then rec('your equipment record: not found'); R.eq = false end; return end
-  R.eq = ea
   local s = read_string(ea, 48)
   if not s then return end
-  R.held = su32(s, 28)                            -- +0x1C: the slot in your hands (1 primary, 2 secondary, 3 support, 5 throwable)
+  if kept and s ~= R.last_eq then
+    -- (1.1.2) a change seen through the kept place: the place is looked up again first; a record that moved is read
+    -- as new (no change acted on), so another player's record can never pass for yours
+    local q0 = EQ.q
+    ea = equip_addr(av, now, true, eqm)
+    if not ea then if R.eq ~= false then rec('your equipment record: not found'); R.eq = false end; return end
+    if EQ.q ~= q0 then R.last_eq = nil; rec('your equipment record moved') end
+    s = read_string(ea, 48)
+    if not s then return end
+  end
+  R.eq = ea
+  R.held = su32(s, HELD_AT)
   R.support = su32(s, 8)
   if s == R.last_eq then return end
   local old = R.last_eq
   R.last_eq = s
   if not old then
     rec('equipment: ' .. slots_text(s) .. ' | rest ' .. hex(s:sub(25)))
-    if R.lua_probe and R.probe_keys then
+    if R.spawn_at and R.probe_keys then
       for k = 0, 3 do local e = entity(su32(s, 4 * k)); if e then R.probe_keys[e.type] = 'your ' .. SLOT_NAMES[k] .. ' (' .. wname(e.type) .. ')' end end
     end
     return
   end
   local was, now_id = su32(old, 8), su32(s, 8)
-  if VERBOSE or was ~= now_id then rec('equipment changed (' .. diff(old, s, 8) .. '): ' .. slots_text(s)) end
+  if VERBOSE or was ~= now_id then rec('equipment changed (' .. diff(old, s, 8) .. '): ' .. slots_text(s, old)) end
   if was ~= now_id then
     local ew, en = entity(was), entity(now_id)
     local w_exp = ew and WEAPONS[ew.type] and WEAPONS[ew.type][2]
@@ -895,7 +962,7 @@ local function equip_step(now)
       if VERBOSE then
         local keys = R.lua_probe and R.probe_keys or {}     -- (a probe still waiting is merged into this one)
         keys[AVATAR_TYPE], keys[ew.type], keys[en.type] = 'your helldiver?', 'your ' .. wname(ew.type), 'the ' .. wname(en.type)
-        R.lua_probe, R.probe_why, R.probe_keys = now + 1.0, 'after a swap', keys
+        R.lua_probe, R.probe_keys = now + 1.0, keys
       end
     elseif n_exp and w_exp then
       -- (1.1.0) an expendable over an expendable: carried too when nothing is carried yet (no support weapon of your
@@ -910,7 +977,7 @@ local function equip_step(now)
 end
 
 local carry_step
-local write_log_now          -- (the log writer, defined below: flushed right before a call into the game)
+local write_log_now          -- (the research log's flush, defined below: right before a call into the game)
 
 -- ======================================================================================================
 -- The carry: your support weapon on your back while the expendable is in your hands
@@ -928,7 +995,7 @@ local HOLSTER = {
   ['b0f1b354ba1d38d8'] = { 'support_mg', -0.05, 0.05, 0, 60, 5, 60 },   -- CQC-1 One True Flag
   ['5f3ec9bda2bd8553'] = { 'support_mg', 0.02, -0.22, -0.25, -100, 0, 0 },   -- CQC-20 Breaching Hammer
   ['e85e623f93f96fb3'] = { 'support', -0.05, 0.03, -0.25, -90, 0, 180 },   -- CQC-72 Entrenchment Tool
-  ['4f8a477e577aaba9'] = { 'support_mg' },   -- ?
+  ['4f8a477e577aaba9'] = { 'support_mg' },   -- (unnamed; the laser rifle's unit in the support slot)
   ['a6a735accb4a327f'] = { 'support_mg' },   -- M-105 Stalwart
   ['b43235dbd493750c'] = { 'support_mg' },   -- M-105 Stalwart
   ['b9606c5aab32c3c2'] = { 'support_mg' },   -- M-105 Stalwart
@@ -954,7 +1021,7 @@ local HOLSTER = {
   ['d54b9505c0f72873'] = { 'support' },   -- LAS-98 Laser Cannon
   ['5990123d142b16cb'] = { 'support' },   -- MLS-4X Commando
   ['35a61296619cc47e'] = { 'support' },   -- LAS-99 Quasar Cannon
-  ['5c54e81a4aaa31fc'] = { 'support' },   -- ?
+  ['5c54e81a4aaa31fc'] = { 'support' },   -- (unnamed; the EAT-17's unit: an EAT variant, not known as an expendable)
   ['80932fa0ed6901d3'] = { 'support' },   -- EAT-17 Expendable Anti-Tank
   ['11c27d3babb38956'] = { 'support_mg' },   -- MG-43 Machine Gun
   ['43a58cb89cfa197c'] = { 'support_mg', -0.01, -0.1, 0.15, 15, 0, 0 },   -- M-1000 Maxigun
@@ -970,7 +1037,6 @@ local HOLSTER = {
   ['8e7968d7e7aa4eab'] = { 'support' },   -- (unnamed support-slot equipment)
   ['f2b4a99d1b0e40c8'] = { 'support' },   -- (unnamed support-slot equipment)
 }
-local function holster_of(t) return HOLSTER[t] end
 -- each weapon's own weapon-switch (wield) sound: its Equipment data's weapon_switch_wield_audio_event (Oct 2026 build;
 -- the TX-41 Sterilizer has none, so it is drawn silently, as in the game)
 local WIELD_SOUND = {
@@ -1061,7 +1127,7 @@ local function entry_of(st)
   local e = recs + idx * IREC + st.which * ENTRY
   local t = read_u32(e + ENTRY_TYPE)
   if t ~= PICKUP_TYPE and t ~= 0 then return nil end
-  return e, t
+  return e, t, idx, im             -- (1.1.2) with the interactable's slot: keep() reaches the switch record from it
 end
 
 -- the pick-up switched off and kept off the game's own way, while your weapon is on your back (the game turns the
@@ -1070,11 +1136,14 @@ end
 -- goes to the other players' games too) and the interactable's 'blocked' byte keeps anything from turning it on again,
 -- and the 'on' byte is still turned off every frame. Both are undone before the weapon is equipped or set down.
 local ISWITCH = ffi.typeof('void (*)(void *, uint32_t, uint32_t, uint8_t)')
+local function switch_at(idx, im)
+  local bits = read_ptr(im + G.im_buckets + 0x28)
+  return bits and bits + idx * G.isw.stride, im
+end
 local function switch_rec(eid)
   local idx, im = interactable(eid)
   if not idx then return nil end
-  local bits = read_ptr(im + G.im_buckets + 0x28)
-  return bits and bits + idx * G.isw.stride, im
+  return switch_at(idx, im)
 end
 local function game_switch(im, eid, which, on)
   ffi.cast(ISWITCH, G.isw.fn)(ffi.cast('void *', im), eid, which, on and 1 or 0)
@@ -1273,6 +1342,7 @@ no_jit(game_detach)
 
 -- off your back (the game's detach: its physics back on), unlocked, its pick-up on (when it was the mod that turned it off)
 local function unstash(st, why)
+  session.dirty = true               -- (1.1.2: the set-down counts are in the log)
   if st.remote then rec(string.format('carry (joined): your %s no longer carried (%s)', wname(st.wt), why)); return end
   local parts = {}
   if st.attached then
@@ -1302,7 +1372,7 @@ end
 
 -- onto your back: the weapon's own holster node and offsets, the way the game holsters it
 local function put_on_back(st, why, quiet)
-  local h = holster_of(st.wt)
+  local h = HOLSTER[st.wt]
   if not h then return 'no holster spot known for it' end
   if not G.att then return 'the game\'s attach was not found' end
   if not (R.av and R.avunit) then return 'no helldiver' end
@@ -1399,11 +1469,11 @@ local function keep(st, now)
   -- and its id can then go to something else
   local ce = entity(st.w)
   if not ce or ce.type ~= st.wt then st.entry = nil; return 'gone' end
-  local entry, t = entry_of(st)
+  local entry, t, idx, im = entry_of(st)
   if not entry then st.entry = nil; return 'gone' end
   st.entry = entry
   -- (the blocked byte kept: anything of the game's clearing it would let the pick-up be switched back on)
-  if st.blocked then local b = switch_rec(st.w); if b and fetch(b + G.isw.block, 1) and b8(0) == 0 then write_u8(b + G.isw.block, 1) end end
+  if st.blocked then local b = switch_at(idx, im); if b and fetch(b + G.isw.block, 1) and b8(0) == 0 then write_u8(b + G.isw.block, 1) end end
   if t ~= 0 and write_u8(entry + ENTRY_TYPE, 0) then
     if not st.locked then rec('carry: your ' .. wname(st.wt) .. ' locked') end
     st.locked = true
@@ -1498,10 +1568,11 @@ end
 -- (<Steam>\userdata\<your Steam account>\553850\remote\input_settings.config; the Steam folder and the signed-in
 -- account come from Steam's own registry values). Its 'ChangeEquipmentSupport' entry lists your keyboard and mouse
 -- keys for it; without one (you never changed it), or with no keyboard or mouse key in it, it is the game's default, 3.
--- Read again every 15 s while nothing is carried, so a key changed in the game's options counts from then on. A
--- controller has no support weapon button: its weapon switch button is used instead (below).
+-- Read a few seconds after your helldiver appears; then, while working and nothing is carried, the file's time is
+-- checked every 15 s and the file read again when it changed, so a key changed in the game's options counts from then
+-- on. A controller has no support weapon button: its weapon switch button is used instead (below).
 local KEYS = { list = nil, text = nil, next_read = 0 }
-local support_key_pressed, pad_switch, keys_step
+local support_key_pressed, pad_switch, keys_step, keys_refresh
 do
   local HKCU = ffi.cast('void *', 0x80000001)
   local REG_BUF, REG_SIZE, REG_DW = ffi.new('char[520]'), ffi.new('uint32_t[1]'), ffi.new('uint32_t[1]')
@@ -1595,7 +1666,15 @@ do
   end
   local function read_keys(now, K, M)
     KEYS.next_read = now + 15
-    local path, why, ftime = input_file()
+    -- (1.1.2) the file found once is checked by its time alone (one file lookup; no registry reads); with no file
+    -- (keys never changed in the game), Steam's folders are looked through once a minute
+    local path, why, ftime
+    if KEYS.path then ftime = file_time(KEYS.path); if ftime then path = KEYS.path end end
+    if not path then
+      path, why, ftime = input_file()
+      KEYS.path = path
+      if not path then KEYS.next_read = now + 60 end
+    end
     -- the same file, unchanged since the last read: nothing to do
     local stamp = tostring(path) .. '|' .. tostring(ftime)
     if KEYS.list and #KEYS.list > 0 and stamp == KEYS.stamp then return end
@@ -1659,7 +1738,7 @@ do
     local text = (#names > 0 and table.concat(names, ', ') or 'none') .. ' (' .. src .. '); controller: '
       .. (#pnames > 0 and table.concat(pnames, ', ') or 'none') .. ' (weapon switch' .. (pbinds and ', your binding' or '') .. ')'
     if text ~= KEYS.text then
-      if KEYS.text then event('your support weapon key is now ' .. text) else rec('support weapon key: ' .. text) end
+      if KEYS.text then event('your support weapon key is now ' .. text) else rec('support weapon key: ' .. text); session.dirty = true end
       KEYS.text = text
     end
     KEYS.list = list
@@ -1671,14 +1750,21 @@ do
     end
     return false
   end
-  -- every frame: the bindings read again now and then, and whether the chat is open (a few key checks)
-  keys_step = function(now)
+  local function devices()
     local SR = rawget(_G, 'stingray') or _G
-    local K, M = rawget(_G, 'Keyboard') or SR.Keyboard, rawget(_G, 'Mouse') or SR.Mouse
-    if now >= KEYS.next_read and not C.stash then
-      local ok, e = pcall(read_keys, now, K, M)
-      if not ok then KEYS.next_read = now + 15; rec('support weapon key: could not be read (' .. tostring(e) .. ')') end
-    end
+    return rawget(_G, 'Keyboard') or SR.Keyboard, rawget(_G, 'Mouse') or SR.Mouse
+  end
+  keys_refresh = function(now)
+    local K, M = devices()
+    local ok, e = pcall(read_keys, now, K, M)
+    if not ok then KEYS.next_read = now + 15; rec('support weapon key: could not be read (' .. tostring(e) .. ')') end
+  end
+  -- every working frame: the bindings checked again every 15 s (not while carrying, not on a pickup's frame); while
+  -- carrying, whether the chat is open (a few key checks: (1.1.2) only then, as nothing can be picked up while typing)
+  keys_step = function(now)
+    if now >= KEYS.next_read and not C.stash and not R.carry_swap then keys_refresh(now) end
+    if not C.stash then return end
+    local K = devices()
     if not K then return end
     if KEYS.chat_until then
       if any(K, KEYS.chat_close_keys) or now > KEYS.chat_until then KEYS.chat_until = nil      -- (sent, closed, or 20 s idle)
@@ -1730,7 +1816,8 @@ carry_step = function(now)
         rec(string.format('you picked up the %s; the game set your %s down (your only support item)', wname(sw.xt), wname(sw.wt)))
       end
       local ok, e = pcall(stash, sw, now)
-      if not ok then rec('carry: error while taking it onto your back: ' .. tostring(e)) end
+      if not ok then rec('carry: error while taking it onto your back: ' .. tostring(e)); session.dirty = true end
+      KEYS.chat_until = nil          -- (1.1.2) the chat is followed from the start of a carry (nothing is picked up while typing)
     end
   end
   if C.back_swap and (R.support == C.back_swap.w or now - C.back_swap.at > 10) then C.back_swap = nil end
@@ -1787,36 +1874,83 @@ carry_step = function(now)
   end
 end
 
--- a joined game is told apart by your interactor's request to the host (the pickup you asked for is
--- carried out by the host's game). Your interactor's request is found once a second; every frame reads one word of it.
-local function find_request()
+-- a joined game is told apart by your interactor's request to the host (the pickup you asked for is carried out by
+-- the host's game). (1.1.2) Your interactor's request is found once per helldiver (a little after it appears); once a
+-- second only the interactors' header is read (2 reads), and the request is looked for again when the header changed
+-- (a player joined or left: the interactors moved). Every working frame reads one word of it.
+local function interactors_sig()
   local mgr = read_ptr(G.imgr); if not mgr then return nil end
   if not fetch(mgr, G.ihead) then return nil end
   local n, list, insts = b32(G.icount), bptr(G.ilist), bptr(G.iinsts)
   if not (list and insts) or n > 64 or n == 0 then return nil end
+  return string.format('%.0f|%d|%.0f|%.0f', mgr, n, list, insts), n, list, insts
+end
+local function find_request()
+  local sig, n, list, insts = interactors_sig()
+  if not sig then return nil end
   if not fetch(list, n * 8) then return nil end
   local infos = {}
   for k = 0, n - 1 do infos[k] = bptr(k * 8) end
   for k = 0, n - 1 do
-    if infos[k] and fetch(infos[k], 0x18) and b8(0x14) % 2 == 1 then return insts + k * G.istride + G.ireq end
+    if infos[k] and fetch(infos[k], 0x18) and b8(0x14) % 2 == 1 then return insts + k * G.istride + G.ireq, sig end
   end
   return nil
 end
 local function request_step(now)
-  if now >= (R.req_find_t or 0) then R.req_find_t = now + 1; R.req_at = find_request() end
+  if now >= (R.req_find_t or 0) then
+    R.req_find_t = now + 1
+    if not R.req_at or interactors_sig() ~= R.req_sig then R.req_at, R.req_sig = find_request() end
+  end
   if R.req_at and fetch(R.req_at + 8, 4) and b32(0) ~= 0 then R.req_t = now end   -- a request waits for a host: a joined game
 end
+-- (1.1.2) the one-off work for a new helldiver, a few seconds after it appears (still idle): your keys, your
+-- interactor's request, and in research builds the engine probe
+local function spawn_work(now)
+  R.spawn_at = nil
+  keys_refresh(now)
+  R.req_at, R.req_sig = find_request(); R.req_find_t = now + 1
+  if VERBOSE and R.probe_keys then pcall(lua_probe, 'your helldiver', R.probe_keys); R.probe_keys = nil end
+end
 
+-- (1.1.2) Idle: with no helldiver of yours (menus, loading, dead) or nothing in your support slot (on the ship, or a
+-- mission before you pick a support weapon up), and nothing carried or on its way back, nothing can happen, as the
+-- mod only acts when an expendable takes the place of a support item. Then it only looks at your support slot 4
+-- times a second (a few reads) and does nothing else: no keys, no joined-game check, no research.
+local IDLE_LOOK = 0.25        -- seconds between looks while idle
 local function frame(now)
+  local busy = C.stash or C.pending or C.back_swap or R.carry_swap
+  if R.idle and not busy and now < R.wake then return end
+  R.busy = busy and true or false
   equip_step(now)
+  if R.spawn_at and now >= R.spawn_at and not R.carry_swap then spawn_work(now) end
+  local sup = R.av and R.support
+  if not busy and not R.carry_swap and (not sup or sup == 0 or sup == 0xFFFFFFFF) then
+    local why = R.av and 'idle: nothing in your support slot (on the ship, or no support weapon yet)' or 'idle: no helldiver of yours (menus, loading, or dead)'
+    if R.idle ~= why then
+      if not R.idle then stats.idle_since = now; KEYS.chat_until = nil end
+      R.idle = why; rec(why); session.dirty = true
+    end
+    R.wake = now + IDLE_LOOK
+    return
+  end
+  if R.idle ~= false then
+    if R.idle then stats.idle_s = stats.idle_s + (now - (stats.idle_since or now)); stats.idle_since = nil end
+    R.idle = false; session.dirty = true
+    if KEYS.next_read < now + 1 then KEYS.next_read = now + 1 end     -- (a key check due now waits a second: not on this frame)
+    rec(string.format('working: your support slot holds %x', sup or 0))
+  end
+  stats.work_frames = stats.work_frames + 1
   request_step(now)
-  if VERBOSE then interactor_step(); input_step(now) end
+  -- (1.1.2) the research only around a pickup or a swap (and while carrying)
+  local around = VERBOSE and now < (R.research_until or 0)
+  if around then interactor_step(); input_step(now) end
   carry_step(now)
   if VERBOSE then
+    if C.stash or C.pending or R.carry_swap then R.research_until = now + 5 end
     watch_step(now)
     if R.lua_probe and now >= R.lua_probe then
       R.lua_probe = nil
-      pcall(lua_probe, R.probe_why or 'after a swap', R.probe_keys or {})
+      pcall(lua_probe, 'after a swap', R.probe_keys or {}); R.probe_keys = nil
     end
   end
 end
@@ -1824,12 +1958,18 @@ end
 -- ======================================================================================================
 -- Log writing, start-up, the game hooks
 -- ======================================================================================================
-local function write_log()
+local function flush_rec()
   if #rec_lines > 0 and RECFILE then
     local f = io.open(RECFILE, 'a')
     if f then f:write(table.concat(rec_lines, '\n'), '\n'); f:close() end
     rec_lines = {}
   end
+end
+-- (1.1.2) the log is written again when something in it changed (checked once a second), otherwise every 15 s
+-- while working and once a minute while idle (it was rewritten every second)
+local function write_log()
+  flush_rec()
+  session.dirty, session.full_at = false, os.clock() + (R.idle and 60 or 15)
   if not LOGFILE then return end
   local f = io.open(LOGFILE, 'w'); if not f then return end
   f:write('Expendable Carry ', VERSION, '\n')
@@ -1838,6 +1978,9 @@ local function write_log()
   for _, n in ipairs(session.notes) do f:write(n, '\n') end
   if KEYS.text then f:write('support weapon key: ', KEYS.text, '\n') end
   f:write('status: ', tostring(EC.status), '\n')
+  local idle_s = stats.idle_s + (stats.idle_since and (os.clock() - stats.idle_since) or 0)
+  f:write(string.format('now: %s; idle %.0f s so far (no helldiver of yours, or nothing in your support slot: menus, the ship); working frames %d of %d\n',
+    R.idle == nil and 'starting' or R.idle and 'idle' or 'working', idle_s, stats.work_frames, stats.frames))
   f:write(string.format('carried on your back: %d; swapped back with the key: %d; after the expendable was used up: %d; set down (other weapon, death): %d; joined games (asked the host): %d; failed: %d\n',
     C.swaps, C.back, C.auto, C.released, C.joined, C.failed))
   f:write(string.format('expendable pickups seen: %d; cost %.4f ms a frame on average (slowest %.2f ms); memory reads %d (failed %d)\n',
@@ -1847,7 +1990,9 @@ local function write_log()
   f:close()
 end
 
-write_log_now = function() pcall(write_log) end
+-- (1.1.2) right before a call into the game: the research log is flushed (a crash leaves its trace there); the main
+-- log is rewritten by the next second's check (it was rewritten in full here, 2 to 4 times on a pickup's frame)
+write_log_now = function() session.dirty = true; pcall(flush_rec) end
 local started, broken, next_log, last_error = false, false, 0, nil
 local function start()
   if started then return end
@@ -1866,13 +2011,15 @@ local function tick()
   if broken then return end
   if not started then start(); if broken then return end end
   local now = os.clock()
-  local t = now
   local ok, e = pcall(frame, now)
   if not ok and e ~= last_error then last_error = e; rec('read error: ' .. tostring(e)) end
-  local ms = (os.clock() - t) * 1000
+  if now >= next_log then
+    next_log = now + 1
+    if session.dirty or now >= session.full_at then write_log() else flush_rec() end
+  end
+  local ms = (os.clock() - now) * 1000          -- ((1.1.2) the log writing counted too)
   stats.frames, stats.ms = stats.frames + 1, stats.ms + ms
   if ms > stats.worst_ms and stats.frames > 60 then stats.worst_ms = ms end
-  if now >= next_log then next_log = now + 1; write_log() end
 end
 
 local game_update, game_shutdown = rawget(_G, 'update'), rawget(_G, 'shutdown')
