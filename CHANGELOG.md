@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.2
+
+- Lighter: the mod now sleeps on the ship, in the menus and whenever nothing is in your support slot (one quick look 4 times a second). While it works it reads less, and nothing heavy happens on the frame you pick something up.
+- Fixed: if your helldiver wasn't fully set up the moment it appeared, the mod could stay inactive for that whole life.
+
 ## 1.1.1
 
 - Switching to your primary or secondary with an expendable in hand now drops the expendable. Before, the game holstered it on your back next to your carried support weapon.

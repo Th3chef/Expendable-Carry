@@ -4,7 +4,7 @@
 
 *Pick up an EAT and keep your support weapon on your back.*
 
-**Download:** `Expendable-Carry-1.1.1.zip` from the [latest release](https://github.com/Th3chef/Expendable-Carry/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
+**Download:** `Expendable-Carry-1.1.2.zip` from the [latest release](https://github.com/Th3chef/Expendable-Carry/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
 
 ## What it does
 
@@ -31,7 +31,7 @@ It's for using an expendable **for a moment** without losing your weapon. It is 
 - **Any support weapon:** every weapon that sits in the support slot can be carried.
 - **No range limit:** your weapon goes with you, and comes back wherever you are.
 - **Safe while carried:** solo and when you host, nobody can pick your carried weapon up, players without the mod included.
-- **Light:** a few hundredths of a millisecond a frame.
+- **Light:** it sleeps on the ship, in the menus and whenever nothing is in your support slot (one quick look 4 times a second), and costs a few hundredths of a millisecond a frame while it works.
 
 ## Multiplayer
 
@@ -49,7 +49,7 @@ None. It's on as soon as it's installed.
 ## Install / update
 
 1. Install [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer if you don't have it.
-2. Mod manager (Arsenal / HD2 Mod Manager): add `Expendable-Carry-1.1.1.zip` and enable it, then **Purge** and **Deploy**.
+2. Mod manager (Arsenal / HD2 Mod Manager): add `Expendable-Carry-1.1.2.zip` and enable it, then **Purge** and **Deploy**.
 
 ## Uninstall
 
@@ -72,7 +72,7 @@ Disable it in your mod manager, then Purge and Deploy. Its log files stay in the
 A Bingus Shared Loader Lua addon.
 - When you pick up an expendable, the game sets your support weapon down as usual. The mod locks it (its pickup does nothing for anyone, and its prompt is off) and has the game attach it to your helldiver's holster spot with the same attach the game uses for every holstered weapon.
 - Your support weapon key with the expendable in hand: the weapon is unlocked and the game's own routines put it back in your support slot (which drops the expendable) and switch to it, the same calls the game makes when you pick a weapon up, minus the pickup itself.
-- Your key comes from the game's control settings file (Steam Cloud), read again every 15 seconds while you're not carrying an expendable, so a key you change in the game's options counts within about 15 seconds.
+- Your key comes from the game's control settings file (Steam Cloud), read a few seconds after your helldiver appears and checked again every 15 seconds while you hold a support weapon, so a key you change in the game's options counts within about 15 seconds.
 - The game's addresses are found by searching the game's code at start-up.
 
 ## Troubleshooting
