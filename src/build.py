@@ -11,7 +11,7 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, HERE)
 import patch_writer
 
-VERSION = '2.0.0'
+VERSION = '2.0.1'
 GUID_RELEASE = 'c8c1dd5a-ec87-4227-b67b-0ff28bc73feb'
 LUA = 0xa14e8dfa2cd117e2
 ADDON = 'mods/chef/expendable_carry'
@@ -198,7 +198,7 @@ def main():
                                         'Image': 'options/cycle.png', 'Include': ['Swap']},
                                        {'Name': 'Drop the Expendable',
                                         'Description': 'Your support weapon key drops the expendable and brings your support weapon '
-                                                       'back, and switching to your primary or secondary drops it too (the way the mod '
+                                                       'back, and switching to your primary, secondary, a grenade or a stratagem drops it too (the way the mod '
                                                        'worked before 2.0).',
                                         'Image': 'options/drop.png', 'Include': ['Drop']}]}]}
     open(os.path.join(pkg, 'manifest.json'), 'w', encoding='utf-8', newline='\n').write(json.dumps(man, indent=2))
