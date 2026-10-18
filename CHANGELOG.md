@@ -2,7 +2,7 @@
 
 ## 1.2.0
 
-- New option: Swap, Don't Drop (off unless you tick it). Your support weapon key swaps what's in your hands and what's on your back instead of dropping the expendable: your support weapon and one expendable, or two expendables. Switching to your primary or secondary keeps the expendable on your back, and an expendable picked up with another weapon out isn't drawn. In joined games the key asks the host for the other item back. Also a toggle in Mod Options Menu.
+- New option: Swap, Don't Drop (off unless you tick it). Your support weapon key swaps what's in your hands and what's on your back instead of dropping the expendable: your support weapon and one expendable, or two expendables. Switching to your primary or secondary keeps the expendable on your back, and an expendable picked up with another weapon out isn't drawn. A support weapon you pick up with an expendable in your hands puts the expendable on your back. In joined games the key asks the host for the other item back. Also a toggle in Mod Options Menu.
 - The mod now has options in your mod manager: when you update, make sure Expendable Carry (required) is ticked.
 
 ## 1.1.2

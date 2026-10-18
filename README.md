@@ -45,6 +45,7 @@ It's for using an expendable **for a moment** without losing your weapon. It is 
 **Swap, Don't Drop** (off unless you tick it): your support weapon key swaps what's in your hands and what's on your back, instead of dropping the expendable.
 
 - Two items at most: your support weapon and one expendable, or two expendables with no support weapon of your own. Pick up a third and the one on your back is set down.
+- Pick up a support weapon with an expendable in your hands: the expendable goes on your back and your own support weapon there is set down. With two expendables, the one on your back stays and the one in your hands is dropped.
 - Switching to your primary or secondary keeps the expendable on your back, and an expendable you pick up with another weapon out stays on your back too; press your support weapon key to draw it.
 - Joined games: the item you swap away stays where the host's game set it down, and the key asks the host for it back each time.
 - With CowboyBingus's Mod Options Menu installed, it's also a toggle in the game's options (MODS tab, EXPENDABLE CARRY).
