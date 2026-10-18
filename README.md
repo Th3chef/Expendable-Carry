@@ -4,7 +4,7 @@
 
 *Carry your support weapon and an expendable, and swap between them with one key.*
 
-**Download:** `Expendable-Carry-2.0.0.zip` from the [latest release](https://github.com/Th3chef/Expendable-Carry/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
+**Download:** `Expendable-Carry-2.0.1.zip` from the [latest release](https://github.com/Th3chef/Expendable-Carry/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
 
 ## What it does
 
@@ -42,7 +42,7 @@ With this mod you carry both. Your support weapon goes onto your back and the ex
 **Expendable Carry (required)** is the mod itself: keep it ticked, and pick what your support weapon key does.
 
 - **Swap, Don't Drop** (the default): the key swaps what's in your hands and what's on your back, as above.
-- **Drop the Expendable** (the way the mod worked before 2.0): the key drops the expendable at your feet and brings your support weapon back, and switching to your primary or secondary drops it too. An expendable picked up with another weapon out goes into your hands.
+- **Drop the Expendable** (the way the mod worked before 2.0): the key drops the expendable at your feet and brings your support weapon back, and switching to your primary, secondary, a grenade or a stratagem drops it too. An expendable picked up with another weapon out goes into your hands.
 
 With CowboyBingus's Mod Options Menu installed, Swap, Don't Drop is also a toggle in the game's options (MODS tab, EXPENDABLE CARRY).
 
@@ -53,7 +53,7 @@ With CowboyBingus's Mod Options Menu installed, Swap, Don't Drop is also a toggl
 ## Install / update
 
 1. Install [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer if you don't have it.
-2. Mod manager (Arsenal / HD2 Mod Manager): add `Expendable-Carry-2.0.0.zip` and enable it. Tick **Expendable Carry (required)** and pick **Swap, Don't Drop** (or **Drop the Expendable**), then **Purge** and **Deploy**.
+2. Mod manager (Arsenal / HD2 Mod Manager): add `Expendable-Carry-2.0.1.zip` and enable it. Tick **Expendable Carry (required)** and pick **Swap, Don't Drop** (or **Drop the Expendable**), then **Purge** and **Deploy**.
 3. Updating from 1.2: the options changed, so check that **Expendable Carry (required)** is ticked and the pick you want is selected.
 
 ## Uninstall
@@ -68,7 +68,6 @@ Disable it in your mod manager, then Purge and Deploy. Its log files stay in the
 
 ## Known limitations
 
-- With **Drop the Expendable**, if you holster the expendable while carrying (a grenade or stratagem throw), the two can share one spot on your back.
 - The TX-41 Sterilizer has no weapon-switch sound in the game, so it comes back without one.
 
 ## How it works

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.1
+
+- Drop the Expendable: pulling out a grenade or calling a stratagem with the expendable in your hands now drops it, like switching to your primary or secondary. Before, the game holstered it on the same spot as your support weapon. Swap, Don't Drop is unchanged.
+
 ## 2.0.0
 
 - Swap, Don't Drop is now the default: your support weapon key swaps what's in your hands and what's on your back. The old way is still there: pick Drop the Expendable under Expendable Carry (required) in your mod manager.
