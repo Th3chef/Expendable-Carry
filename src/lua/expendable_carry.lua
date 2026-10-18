@@ -26,7 +26,7 @@
 -- feet) and switch to it, with the weapon's own weapon-switch sound, the same calls the game makes when you pick a
 -- weapon up, minus the pickup itself. When the expendable is used up, your weapon goes back in your support slot the
 -- same way but stays on its sling (on your back) until you draw it.
-local VERSION = '1.2.0'
+local VERSION = '2.0.0'
 local VERBOSE = false          -- more details in the research log (off in the release)
 
 if rawget(_G, 'ChefExpendableCarry') then return end
@@ -1190,12 +1190,16 @@ local function v3(v)
   return nil
 end
 local C = { stash = nil, swaps = 0, back = 0, auto = 0, released = 0, joined = 0, failed = 0 }
--- (1.2.0) Swap, Don't Drop (an option, off by default; its code calls it cycling): your support weapon key swaps the two items, the one in your hands
+-- (1.2.0) Swap, Don't Drop ((2.0.0) the default; its code calls it cycling): your support weapon key swaps the two items, the one in your hands
 -- going onto your back, instead of dropping the expendable. Two items at most: your support weapon and one expendable,
 -- or two expendables with no support weapon of your own. Switching to any other weapon keeps the expendable (the game
 -- holsters it). In a joined game the item put away lies where the host's game set it down and the key asks the host
--- for it back. Ticked in the mod manager (its addon sets ChefExpendableCarryCycle); Mod Options Menu toggle in game.
-local CY = { on = false, ticked = false, cycles = 0 }
+-- for it back. (2.0.0) On unless 'Drop the Expendable' is picked in the mod manager (its addon sets
+-- ChefExpendableCarryDrop); Mod Options Menu toggle in game.
+local CY = { on = false, swap_pick = false, cycles = 0,
+  -- (2.0.0) two items on your back: the carried one shifted beside the holstered slot item, in its own back spot's
+  -- frame (metres), a value for each spot (picked in game)
+  place = { support = { 0.15, 0, 0 }, support_mg = { 0.15, 0, 0 } } }
 -- the game's own routines (the same calls, in the same order, as its weapon pickup minus the pickup itself):
 -- set the support slot (it drops what the slot held), tell the other players' games, then the wield request (the
 -- weapon-switch animation and sound)
@@ -1384,10 +1388,12 @@ local function unstash(st, why)
 end
 
 -- onto your back: the weapon's own holster node and offsets, the way the game holsters it
-local function put_on_back(st, why, quiet, other)
+local function put_on_back(st, why, quiet, extra)
   local h = HOLSTER[st.wt]
   if not h then return 'no holster spot known for it' end
-  if other then h = { other } end    -- ((1.2.0) the other back spot, no offsets: see keep())
+  if extra then                      -- ((1.2.0) shifted beside the holstered slot item: see keep())
+    h = { h[1], (h[2] or 0) + extra[1], (h[3] or 0) + extra[2], (h[4] or 0) + extra[3], h[5], h[6], h[7] }
+  end
   if not G.att then return 'the game\'s attach was not found' end
   if not (R.av and R.avunit) then return 'no helldiver' end
   -- always the weapon's own holster node and offsets, the way the game holsters it (another node's holster rotation
@@ -1401,7 +1407,7 @@ local function put_on_back(st, why, quiet, other)
   local ok, ni, e = pcall(game_attach, st.w, R.avunit, node, h)
   if not ok then return 'attach error: ' .. tostring(ni) end
   if not ni then return tostring(e) end
-  st.attached, st.node, st.pu = true, node, R.avunit
+  st.attached, st.node, st.pu, st.place_own, st.place_extra = true, node, R.avunit, node, extra
   local to = attached_to(st.w)
   st.verified = to == R.avunit
   return string.format('attached on %s (node %d) by the game%s', node, ni,
@@ -1498,21 +1504,22 @@ local function keep(st, now)
   if st.entry and fetch(st.entry + ENTRY_ON, 1) and b8(0) ~= 0 then      -- (every frame: one byte)
     if write_u8(st.entry + ENTRY_ON, 0) then st.relit, st.off = (st.relit or 0) + 1, true end
   end
-  -- (1.2.0) Swap, Don't Drop: with the item in your support slot not in your hands, the game holsters it; when it uses
-  -- the same spot as the carried one (EATs, the Autocannon, the Commando ... all use 'support'), the carried one is
-  -- moved to the other back spot until you draw the slot's item again. Table look-ups only; an attach only on a change.
+  -- (1.2.0) Swap, Don't Drop: with the item in your support slot not in your hands, the game holsters it on your back
+  -- too. The carried one then stays on its own spot, shifted beside it (CY.place: an offset for each back spot), until
+  -- you draw the slot's item again. Table look-ups only; an attach only on a change.
   if CY.on and st.attached and G.att and R.avunit then
     local hw, hx = HOLSTER[st.wt], HOLSTER[st.xt]
     local own = hw and hw[1]
-    local want = own
-    if R.held ~= 3 and hx and hx[1] == own and (own == 'support' or own == 'support_mg') then
-      want = own == 'support' and 'support_mg' or 'support'
-    end
-    if want ~= st.node and want ~= st.node_failed then
-      local r = put_on_back(st, want ~= own and ' (moved aside: the ' .. wname(st.xt) .. ' is holstered on ' .. own .. ')' or ' (back on its own spot)',
-        true, want ~= own and want or nil)
-      rec(string.format('carry: your %s %s', wname(st.wt), r))
-      st.node_failed = st.node ~= want and want or nil     -- (a failed move is not tried again every frame)
+    local both = R.held ~= 3 and hx and (hx[1] == 'support' or hx[1] == 'support_mg') and (own == 'support' or own == 'support_mg')
+    local extra = both and CY.place[own] or nil
+    st.want_extra = extra                -- ((2.0.0) the put-back below uses it too)
+    -- (2.0.0) compared by the spot and the offset table itself: no strings made every frame
+    if (own ~= st.place_own or extra ~= st.place_extra) and not (st.fail_own == own and st.fail_extra == extra) then
+      local r = put_on_back(st, both and string.format(' (beside the %s holstered on %s)', wname(st.xt), hx[1]) or ' (back on its own spot)',
+        true, extra)
+      rec(string.format('carry: your %s %s%s', wname(st.wt), r, extra and string.format(', shifted %.2f %.2f %.2f', extra[1], extra[2], extra[3]) or ''))
+      if r:find('^attached on') then st.fail_own, st.fail_extra = nil, nil
+      else st.fail_own, st.fail_extra = own, extra end      -- (a failed attach is not tried again every frame)
     end
   end
   if now < st.next_check then return end
@@ -1550,7 +1557,7 @@ local function keep(st, now)
     end
     if why then
       st.tries = st.tries + 1
-      local r = put_on_back(st, ' again', st.tries > 5)
+      local r = put_on_back(st, ' again', st.tries > 5, st.want_extra)   -- ((2.0.0) beside the slot item when both are on your back)
       if st.tries <= 5 then rec(string.format('carry: your %s is not on your back (%s): %s', wname(st.wt), why, r)) end
     end
   end
@@ -2092,7 +2099,7 @@ local function write_log()
   if KEYS.text then f:write('support weapon key: ', KEYS.text, '\n') end
   f:write('status: ', tostring(EC.status), '\n')
   f:write(string.format("Swap, Don't Drop: %s (mod manager: %s; options menu: %s); swapped %d time(s)\n", CY.on and 'on' or 'off',
-    CY.ticked and 'ticked' or 'not ticked', tostring(CY.menu or 'not looked for yet'), CY.cycles))
+    CY.swap_pick and "Swap, Don't Drop" or 'Drop the Expendable', tostring(CY.menu or 'not looked for yet'), CY.cycles))
   local idle_s = stats.idle_s + (stats.idle_since and (os.clock() - stats.idle_since) or 0)
   f:write(string.format('now: %s; idle %.0f s so far (no helldiver of yours, or nothing in your support slot: menus, the ship); working frames %d of %d\n',
     R.idle == nil and 'starting' or R.idle and 'idle' or 'working', idle_s, stats.work_frames, stats.frames))
@@ -2109,19 +2116,20 @@ end
 -- (1.1.2) right before a call into the game: the research log is flushed (a crash leaves its trace there); the main
 -- log is rewritten by the next second's check (it was rewritten in full here, 2 to 4 times on a pickup's frame)
 write_log_now = function() session.dirty = true; pcall(flush_rec) end
--- (1.2.0) the Cycle option: ticked in the mod manager (its addon sets the flag), and a toggle in Mod Options Menu's
+-- (1.2.0) Swap, Don't Drop: (2.0.0) the mod manager's default pick (the other pick, Drop the Expendable, has an addon
+-- that sets a flag), and a toggle in Mod Options Menu's
 -- MODS tab when that mod is installed (looked for once, at start-up: by then every addon has loaded; no polling)
 -- (the option's text: build.py reads this line for the mod manager's option description too)
 local CYCLE_TEXT = "Your support weapon key swaps what's in your hands with what's on your back, instead of dropping the expendable. Two items at most: your support weapon and one expendable, or two expendables."
 function CY.link()
-  CY.ticked = rawget(_G, 'ChefExpendableCarryCycle') == true
-  CY.on = CY.ticked
+  CY.swap_pick = rawget(_G, 'ChefExpendableCarryDrop') ~= true   -- ((2.0.0) on unless Drop the Expendable is picked)
+  CY.on = CY.swap_pick
   CY.menu = 'not installed (the mod manager\'s pick counts)'
   local M = rawget(_G, 'ModOptionsMenu')
   if type(M) ~= 'table' or type(M.register_option) ~= 'function' then return end
-  local id = 'expendable_carry.cycle.' .. (CY.ticked and 'on' or 'off')
+  local id = 'expendable_carry.swap.' .. (CY.swap_pick and 'on' or 'off')   -- ((2.0.0) new ids: 1.2.0's saved toggle doesn't carry over)
   local ok, e = pcall(M.register_option, id, { type = 'toggle', label = "Swap, Don't Drop", mod = 'EXPENDABLE CARRY',
-    default = CY.ticked, description = CYCLE_TEXT })
+    default = CY.swap_pick, description = CYCLE_TEXT })
   if not ok then CY.menu = 'could not add the toggle (' .. tostring(e) .. ')'; return end
   local okg, v = pcall(M.get, id)
   if okg and type(v) == 'boolean' then CY.on = v end
