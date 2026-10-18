@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.0
+
+- Swap, Don't Drop is now the default: your support weapon key swaps what's in your hands and what's on your back. The old way is still there: pick Drop the Expendable under Expendable Carry (required) in your mod manager.
+- With two items on your back, the carried one now sits beside the other instead of moving to a second spot, so they no longer stand upright or overlap.
+- The mod manager options changed: when you update, check that Expendable Carry (required) is ticked and the pick you want is selected. The Mod Options Menu toggle starts at your pick.
+
 ## 1.2.0
 
 - New option: Swap, Don't Drop (off unless you tick it). Your support weapon key swaps what's in your hands and what's on your back instead of dropping the expendable: your support weapon and one expendable, or two expendables. Switching to your primary or secondary keeps the expendable on your back, and an expendable picked up with another weapon out isn't drawn. A support weapon you pick up with an expendable in your hands puts the expendable on your back. In joined games the key asks the host for the other item back. Also a toggle in Mod Options Menu.
