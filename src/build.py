@@ -11,10 +11,11 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, HERE)
 import patch_writer
 
-VERSION = '1.1.2'
+VERSION = '1.2.0'
 GUID_RELEASE = 'c8c1dd5a-ec87-4227-b67b-0ff28bc73feb'
 LUA = 0xa14e8dfa2cd117e2
 ADDON = 'mods/chef/expendable_carry'
+CYCLE_ADDON = 'mods/chef/expendable_carry_cycle'      # (1.2.0) the Swap, Don't Drop option: only sets a flag
 ANTON = os.path.join(HERE, 'fonts', 'anton-latin-400-normal.ttf')
 ZIP_DATE = (2026, 10, 1, 0, 0, 0)       # every zip entry's date: the same sources give the same zip, byte for byte
 # never in what ships (compared in lower case; a drive letter only at the start of a word, so 'record:\\n' is no hit),
@@ -23,6 +24,14 @@ PERSONAL = [re.compile(p) for p in (rb'c:\\+users', rb'(?<![a-z0-9_])d:\\', rb'/
 if os.path.exists(os.path.join(HERE, 'personal_patterns.txt')):
     PERSONAL += [re.compile(l.strip().encode()) for l in open(os.path.join(HERE, 'personal_patterns.txt'), encoding='utf-8')
                  if l.strip() and not l.startswith('#')]
+
+
+def cycle_text(src):
+    """(1.2.0) the Swap, Don't Drop option's description: the one copy is the Lua's CYCLE_TEXT line (the menu shows it too)"""
+    m = re.search(r'^local CYCLE_TEXT = "([^"]+)"$', src, re.M)
+    if not m:
+        sys.exit('build.py: the Lua has no one-line CYCLE_TEXT')
+    return m.group(1)
 
 
 def resource_hash(name):
@@ -66,6 +75,31 @@ def icon(label):
         w = d.textlength(label, font=f2)
         d.text(((S - w) / 2, 760), label, font=f2, fill=(255, 80, 60), stroke_width=6, stroke_fill=(0, 0, 0))
     return img.resize((512, 512), Image.LANCZOS)
+
+
+def option_icons(pkg):
+    """(1.2.0) Arsenal option pictures, 256x256: the core's is the mod's icon; the option's is the mod's art darkened
+    behind a thick yellow frame with one glyph (two arrows around a tube: the swap)."""
+    import math
+    os.makedirs(os.path.join(pkg, 'options'), exist_ok=True)
+    S, Y = 1024, (255, 231, 16)
+    art = os.path.join(HERE, 'artwork', 'icon.png')
+    base = Image.open(art).convert('RGB') if os.path.exists(art) else icon('')
+    base.resize((256, 256), Image.LANCZOS).save(os.path.join(pkg, 'options', 'core.png'), optimize=True)
+    bg = base.resize((S, S), Image.LANCZOS).filter(ImageFilter.GaussianBlur(18)).point(lambda v: int(v * 0.35))
+    d = ImageDraw.Draw(bg)
+    d.rounded_rectangle((20, 20, S - 20, S - 20), 48, outline=Y, width=56)
+    c, r, w = S // 2, 300, 70
+    d.arc((c - r, c - r, c + r, c + r), 200, 340, fill=Y, width=w)
+    d.arc((c - r, c - r, c + r, c + r), 20, 160, fill=Y, width=w)
+    for ang in (340, 160):                    # an arrowhead at each arc's end, along the circle
+        a = math.radians(ang)
+        x, y = c + r * math.cos(a), c + r * math.sin(a)
+        tx, ty, nx, ny = -math.sin(a), math.cos(a), math.cos(a), math.sin(a)
+        d.polygon([(x + tx * 150, y + ty * 150), (x + nx * 110, y + ny * 110), (x - nx * 110, y - ny * 110)], fill=Y)
+    d.rounded_rectangle((c - 190, c - 45, c + 190, c + 45), 20, fill=Y)
+    d.rectangle((c - 120, c + 45, c - 80, c + 120), fill=Y)
+    bg.resize((256, 256), Image.LANCZOS).save(os.path.join(pkg, 'options', 'cycle.png'), optimize=True)
 
 
 def clean_out(out):
@@ -117,28 +151,45 @@ def main():
     built = os.path.join(out, 'addon.built.lua')
     open(built, 'w', encoding='utf-8', newline='\n').write(src)
     check_lua(built)
-    toc, gpu, stream = patch_writer.write([(resource_hash(ADDON), LUA, lua_resource(src), b'', b'', 16)], [(LUA, 16)])
-    patch_writer.check(toc, gpu, stream)
-    base = os.path.join(pkg, '9ba626afa44a3aa3.patch_0')
-    open(base, 'wb').write(toc); open(base + '.gpu_resources', 'wb').write(gpu); open(base + '.stream', 'wb').write(stream)
+    # (1.2.0) mod manager options: the core (required) and Swap, Don't Drop, each its own patch in its own folder
+    cyc = open(os.path.join(HERE, 'lua', 'cycle.lua'), encoding='utf-8').read()
+    if not cyc.startswith('-- HD2-Addon: %s\n' % CYCLE_ADDON):
+        sys.exit('build.py: lua/cycle.lua must start with -- HD2-Addon: %s' % CYCLE_ADDON)
+    patches = []
+    for folder, addon, text in (('Core', ADDON, src), ('Cycle', CYCLE_ADDON, cyc)):
+        toc, gpu, stream = patch_writer.write([(resource_hash(addon), LUA, lua_resource(text), b'', b'', 16)], [(LUA, 16)])
+        patch_writer.check(toc, gpu, stream)
+        os.makedirs(os.path.join(pkg, folder))
+        base = os.path.join(pkg, folder, '9ba626afa44a3aa3.patch_0')
+        open(base, 'wb').write(toc); open(base + '.gpu_resources', 'wb').write(gpu); open(base + '.stream', 'wb').write(stream)
+        patches += [base, base + '.gpu_resources', base + '.stream']
+    option_icons(pkg)
     art = os.path.join(HERE, 'artwork', 'icon.png')
     if os.path.exists(art):                   # the release art, 512x512 (Arsenal shows it small)
         Image.open(art).convert('RGB').resize((512, 512), Image.LANCZOS).save(os.path.join(pkg, 'icon.png'), optimize=True)
     else:
         icon('').save(os.path.join(pkg, 'icon.png'), optimize=True)
     man = {'Version': 1, 'Guid': guid, 'Name': 'Expendable Carry ' + full,
-           'Description': ('Pick up an expendable support weapon (EAT-17, EAT-700, EAT-411, MGX-42, MLS-4X) or the Solo Silo targeting remote and keep '
-                           'your own: your support weapon goes onto your back. Press your support weapon key (3, or the key you set in the game) with '
-                           'the expendable in hand and your weapon is back in your hands (the expendable is dropped); '
-                           'use the expendable up and your weapon stays on your back until you draw it. On a controller, '
-                           'tap the switch weapon button. Switching to your primary or secondary drops the expendable. With no support weapon of your own, picking up a second expendable carries the first one the same way. In a joined game the key asks the host for your weapon back from '
-                           'wherever it was set down. Requires Bingus Shared Loader v19 or newer.'),
-           'IconPath': 'icon.png'}
+           'Description': ('Pick up an expendable (EAT-17, EAT-700, EAT-411, MGX-42, MLS-4X, the Solo Silo remote) and your own support weapon '
+                           'goes onto your back. Your support weapon key (or a tap of switch weapon on a controller) drops the expendable and '
+                           'brings your weapon back; use the expendable up and your weapon stays on your back. Switching to your primary or '
+                           'secondary drops the expendable. With no support weapon of your own, a second expendable carries the first. Joined '
+                           "games: the key asks the host for your weapon back. Option Swap, Don't Drop: the key swaps the two instead. "
+                           'Requires Bingus Shared Loader v19 or newer.'),
+           'IconPath': 'icon.png',
+           'Options': [{'Name': 'Expendable Carry (required)', 'Description': 'The mod itself: keep this ticked.',
+                        'Image': 'options/core.png', 'Include': ['Core']},
+                       {'Name': "Swap, Don't Drop", 'Description': cycle_text(src) + ' Off unless ticked.',
+                        'Image': 'options/cycle.png', 'Include': ['Cycle']}]}
     open(os.path.join(pkg, 'manifest.json'), 'w', encoding='utf-8', newline='\n').write(json.dumps(man, indent=2))
-    check_private([base, base + '.gpu_resources', base + '.stream', os.path.join(pkg, 'manifest.json')])
+    check_private(patches + [os.path.join(pkg, 'manifest.json')])
     z = os.path.join(out, name)
+    files = []
+    for dp, dn, fn in os.walk(pkg):
+        dn.sort()
+        for f in fn: files.append(os.path.relpath(os.path.join(dp, f), pkg).replace(os.sep, '/'))
     with zipfile.ZipFile(z, 'w', zipfile.ZIP_DEFLATED) as zf:
-        for f in sorted(os.listdir(pkg)):
+        for f in sorted(files):
             zi = zipfile.ZipInfo(f, ZIP_DATE)
             zi.compress_type, zi.create_system, zi.external_attr = zipfile.ZIP_DEFLATED, 0, 0o644 << 16
             zf.writestr(zi, open(os.path.join(pkg, f), 'rb').read())

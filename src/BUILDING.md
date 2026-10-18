@@ -1,10 +1,11 @@
 # Expendable Carry - source
 
-A Bingus Shared Loader Lua mod: one addon, `lua/expendable_carry.lua`.
+A Bingus Shared Loader Lua mod: the addon `lua/expendable_carry.lua`, and `lua/cycle.lua` for the Swap, Don't Drop option (a mod manager option; it only sets a flag the addon reads).
 
     lua/expendable_carry.lua
-                    the addon (plain Lua; Bingus Shared Loader finds it by its first line)
-    build.py        builds the mod zip (Python 3 + Pillow):
+                    the addon (plain Lua; Bingus Shared Loader finds it by its first line): folder Core in the zip
+    lua/cycle.lua   the Swap, Don't Drop option's addon: folder Cycle in the zip
+    build.py        builds the mod zip with its two mod manager options and their pictures (Python 3 + Pillow):
                       python3 build.py out              -> out/Expendable-Carry-<ver>.zip (the release)
     patch_writer.py writes the patch archive
     fonts/          Anton (SIL Open Font License), for the plain icon build.py draws when artwork/icon.png is missing
