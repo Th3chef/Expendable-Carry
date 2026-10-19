@@ -1,6 +1,7 @@
 -- HD2-Addon: mods/chef/expendable_carry
 -- Expendable Carry for Helldivers 2 (Bingus Shared Loader v19+ addon).
--- Pick up an expendable support weapon (EAT-17, EAT-700, EAT-411, MGX-42, MLS-4X) or the Solo Silo's targeting remote and
+-- Pick up an expendable support weapon (EAT-17, EAT-700, EAT-411, MGX-42, MLS-4X), the Solo Silo's targeting remote or the
+-- Acquire Evidence missions' Tactical Video Camera and
 -- keep your own support weapon:
 -- it stays holstered on your back while the expendable is in your hands. Press your support weapon key with the
 -- expendable in hand and the expendable is dropped and your own weapon is back in your hands; use the expendable up and
@@ -26,7 +27,7 @@
 -- feet) and switch to it, with the weapon's own weapon-switch sound, the same calls the game makes when you pick a
 -- weapon up, minus the pickup itself. When the expendable is used up, your weapon goes back in your support slot the
 -- same way but stays on its sling (on your back) until you draw it.
-local VERSION = '2.0.2'
+local VERSION = '2.1.0'
 local VERBOSE = false          -- more details in the research log (off in the release)
 
 if rawget(_G, 'ChefExpendableCarry') then return end
@@ -50,6 +51,9 @@ local WEAPONS = {
   ['b16c9d490aa59b77'] = { 'MGX-42 Bullet Storm', true },
   ['5990123d142b16cb'] = { 'MLS-4X Commando', true },
   ['fc13460592ca79aa'] = { 'Solo Silo Targeting Remote', true },   -- MS-11 Solo Silo: sits in the support slot too
+  -- (2.0.3) the Acquire Evidence missions' camera: it sits in the support slot too, with a support pickup like the EAT's,
+  -- so the game drops your support weapon for it. I treat it as an expendable: carried with your support weapon.
+  ['372481e910c05a76'] = { 'Tactical Video Camera', true },
   ['6cfcc7f8801a0266'] = { '40-K Meltagun' }, ['a8cffb316f0b5c5f'] = { 'AC-8 Autocannon' },
   ['89c5493e08ca4207'] = { 'APW-1 Anti-Materiel Rifle' }, ['96de9cd50f7306e6'] = { 'ARC-3 Arc Thrower' },
   ['78a8185f63a70795'] = { 'B/FLAM-80 Cremator' }, ['25aa2fd4643cf4ee'] = { 'FAF-14 Spear' },
@@ -64,7 +68,6 @@ local WEAPONS = {
   -- the other weapons that sit in the support slot (their own folders: the Stalwart is under primary_weapons)
   ['085c1edb038ec24e'] = { 'MG-206 Heavy Machine Gun' },
   ['1d5943301a29c940'] = { 'E/GL-21 Grenadier Battlement' },
-  ['372481e910c05a76'] = { 'TACTICAL VIDEO CAMERA' },
   ['444880f62ca7eae8'] = { 'B/FLAM-80 Cremator' },
   ['52071f49263415e4'] = { 'SG-88 Break-Action Shotgun' },
   ['5f3ec9bda2bd8553'] = { 'CQC-20 Breaching Hammer' },
@@ -1079,7 +1082,7 @@ local HOLSTER = {
   ['cd00bdc1149c2928'] = { 'support_mg' },   -- MG-206 Heavy Machine Gun
   ['444880f62ca7eae8'] = { 'support_mg', 0, -0.35, 0.2, -5, 0, 0 },   -- B/FLAM-80 Cremator
   ['52071f49263415e4'] = { 'support_mg', 0.02, 0.12, 0.18, 0, 0, 0 },   -- SG-88 Break-Action Shotgun
-  ['372481e910c05a76'] = { 'support' },   -- TACTICAL VIDEO CAMERA
+  ['372481e910c05a76'] = { 'support' },   -- Tactical Video Camera
   ['8e7968d7e7aa4eab'] = { 'support' },   -- (unnamed support-slot equipment)
   ['f2b4a99d1b0e40c8'] = { 'support' },   -- (unnamed support-slot equipment)
 }
