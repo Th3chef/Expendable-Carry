@@ -4,7 +4,7 @@
 
 *Carry your support weapon and an expendable, and swap between them with one key.*
 
-**Download:** `Expendable-Carry-2.0.2.zip` from the [latest release](https://github.com/Th3chef/Expendable-Carry/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
+**Download:** `Expendable-Carry-2.1.0.zip` from the [latest release](https://github.com/Th3chef/Expendable-Carry/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
 
 ## What it does
 
@@ -14,7 +14,7 @@ With this mod you carry both. Your support weapon goes onto your back and the ex
 
 ## How to use it
 
-1. **Pick up an expendable** (EAT-17, EAT-700, EAT-411 Leveller, MGX-42 Bullet Storm, MLS-4X Commando, or the Solo Silo's targeting remote). Your support weapon goes onto your back, where the game holsters it, and the expendable is in your hands.
+1. **Pick up an expendable** (EAT-17, EAT-700, EAT-411 Leveller, MGX-42 Bullet Storm, MLS-4X Commando, the Solo Silo's targeting remote, or the Tactical Video Camera from Acquire Evidence missions). Your support weapon goes onto your back, where the game holsters it, and the expendable is in your hands.
 2. **Swap:** press your support weapon key (3 by default). Your weapon is back in your hands, with its own weapon-switch sound, and the expendable goes on your back. Press it again to swap back.
 3. **Fire it.** When the expendable is used up, your support weapon goes back to your support slot. It stays on your back until you draw it, like any holstered weapon.
 
@@ -27,6 +27,7 @@ With this mod you carry both. Your support weapon goes onto your back and the ex
 - **Your own key:** the mod uses your support weapon key from the game's controls, so a key you changed works too. Typing it in the chat doesn't swap.
 - **Controllers:** a controller has no support weapon button, so tap your switch weapon button (Y / Triangle by default). Holding it for the weapon wheel doesn't swap.
 - **The Solo Silo's remote** goes on its own spot on your belt.
+- **The Tactical Video Camera** (Acquire Evidence missions) counts as an expendable too. It never runs out, so it stays with you until you swap it back or drop it.
 - **Any support weapon:** every weapon that sits in the support slot can be carried.
 - **No range limit:** what you carry goes with you, and comes back wherever you are.
 - **Safe while carried:** solo and when you host, nobody can pick up what's on your back, players without the mod included.
@@ -54,7 +55,7 @@ With CowboyBingus's Mod Options Menu installed, Swap, Don't Drop is also a toggl
 ## Install / update
 
 1. Install [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer if you don't have it.
-2. Mod manager (Arsenal / HD2 Mod Manager): add `Expendable-Carry-2.0.2.zip` and enable it. Tick **Expendable Carry (required)** and pick **Swap, Don't Drop** (or **Drop the Expendable**), then **Purge** and **Deploy**.
+2. Mod manager (Arsenal / HD2 Mod Manager): add `Expendable-Carry-2.1.0.zip` and enable it. Tick **Expendable Carry (required)** and pick **Swap, Don't Drop** (or **Drop the Expendable**), then **Purge** and **Deploy**.
 3. Updating from 1.2: the options changed, so check that **Expendable Carry (required)** is ticked and the pick you want is selected.
 
 ## Uninstall

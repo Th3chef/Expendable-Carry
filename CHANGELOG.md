@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.1.0
+
+- New: the Tactical Video Camera from Acquire Evidence missions counts as an expendable. Pick it up and your support weapon goes on your back; your support weapon key swaps between them.
+
 ## 2.0.2
 
 - Fixed: in first person, the item on your back no longer gets in your view (the EAT on sharp turns, the Leveller and the Quasar right away). It's hidden while you're in first person, the same way the game hides its own holstered weapons, and aiming in third person doesn't hide it.
