@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.2
+
+- Fixed: in first person, the item on your back no longer gets in your view (the EAT on sharp turns, the Leveller and the Quasar right away). It's hidden while you're in first person, the same way the game hides its own holstered weapons, and aiming in third person doesn't hide it.
+
 ## 2.0.1
 
 - Drop the Expendable: pulling out a grenade or calling a stratagem with the expendable in your hands now drops it, like switching to your primary or secondary. Before, the game holstered it on the same spot as your support weapon. Swap, Don't Drop is unchanged.

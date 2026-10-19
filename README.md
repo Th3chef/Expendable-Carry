@@ -4,7 +4,7 @@
 
 *Carry your support weapon and an expendable, and swap between them with one key.*
 
-**Download:** `Expendable-Carry-2.0.1.zip` from the [latest release](https://github.com/Th3chef/Expendable-Carry/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
+**Download:** `Expendable-Carry-2.0.2.zip` from the [latest release](https://github.com/Th3chef/Expendable-Carry/releases/latest) (not the source code). Needs [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer.
 
 ## What it does
 
@@ -30,6 +30,7 @@ With this mod you carry both. Your support weapon goes onto your back and the ex
 - **Any support weapon:** every weapon that sits in the support slot can be carried.
 - **No range limit:** what you carry goes with you, and comes back wherever you are.
 - **Safe while carried:** solo and when you host, nobody can pick up what's on your back, players without the mod included.
+- **First person:** what's on your back is hidden while you're in first person, the way the game hides its own holstered weapons, so it never gets in your view.
 - **Light:** it sleeps on the ship, in the menus and whenever nothing is in your support slot (one quick look 4 times a second), and costs a few hundredths of a millisecond a frame while it works.
 
 ## Multiplayer
@@ -53,7 +54,7 @@ With CowboyBingus's Mod Options Menu installed, Swap, Don't Drop is also a toggl
 ## Install / update
 
 1. Install [Bingus Shared Loader](https://www.nexusmods.com/helldivers2/mods/16292) v19 or newer if you don't have it.
-2. Mod manager (Arsenal / HD2 Mod Manager): add `Expendable-Carry-2.0.1.zip` and enable it. Tick **Expendable Carry (required)** and pick **Swap, Don't Drop** (or **Drop the Expendable**), then **Purge** and **Deploy**.
+2. Mod manager (Arsenal / HD2 Mod Manager): add `Expendable-Carry-2.0.2.zip` and enable it. Tick **Expendable Carry (required)** and pick **Swap, Don't Drop** (or **Drop the Expendable**), then **Purge** and **Deploy**.
 3. Updating from 1.2: the options changed, so check that **Expendable Carry (required)** is ticked and the pick you want is selected.
 
 ## Uninstall
@@ -78,6 +79,7 @@ A Bingus Shared Loader Lua addon.
 - With both on your back, the carried item sits beside the one the game holsters, on its own spot, shifted to the side.
 - The Drop the Expendable pick only sets a flag the mod reads at start-up.
 - Your key comes from the game's control settings file (Steam Cloud), read a few seconds after your helldiver appears and checked again every 15 seconds while you hold a support weapon, so a key you change in the game's options counts within about 15 seconds.
+- In first person, the carried item is hidden with the same calls the game makes for its own holstered weapons when its camera goes into first person, and shown again when you leave it.
 - The game's addresses are found by searching the game's code at start-up.
 
 ## Troubleshooting
