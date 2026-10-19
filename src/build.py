@@ -11,7 +11,7 @@ HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(0, HERE)
 import patch_writer
 
-VERSION = '2.0.2'
+VERSION = '2.1.0'
 GUID_RELEASE = 'c8c1dd5a-ec87-4227-b67b-0ff28bc73feb'
 LUA = 0xa14e8dfa2cd117e2
 ADDON = 'mods/chef/expendable_carry'
@@ -184,7 +184,7 @@ def main():
     else:
         icon('').save(os.path.join(pkg, 'icon.png'), optimize=True)
     man = {'Version': 1, 'Guid': guid, 'Name': 'Expendable Carry ' + full,
-           'Description': ('Carry two: pick up an expendable (EAT-17, EAT-700, EAT-411, MGX-42, MLS-4X, the Solo Silo remote) and your own '
+           'Description': ('Carry two: pick up an expendable (EAT-17, EAT-700, EAT-411, MGX-42, MLS-4X, the Solo Silo remote, the Tactical Video Camera) and your own '
                            'support weapon goes onto your back. Your support weapon key (or a tap of switch weapon on a controller) swaps '
                            "what's in your hands with what's on your back: your support weapon and one expendable, or two expendables. Use "
                            'the expendable up and your weapon stays on your back. Joined games: the key asks the host for the other item '
