@@ -26,7 +26,7 @@
 -- feet) and switch to it, with the weapon's own weapon-switch sound, the same calls the game makes when you pick a
 -- weapon up, minus the pickup itself. When the expendable is used up, your weapon goes back in your support slot the
 -- same way but stays on its sling (on your back) until you draw it.
-local VERSION = '2.0.1'
+local VERSION = '2.0.2'
 local VERBOSE = false          -- more details in the research log (off in the release)
 
 if rawget(_G, 'ChefExpendableCarry') then return end
@@ -321,12 +321,23 @@ local P = {
   -- interactable) and refuses to turn one on while the interactable's 'blocked' byte is set. Found where a pick-up's
   -- delay runs out and the game turns it on.
   iswitch = '41 8B 55 08 41 B1 01 44 8B C3 48 8B CD E8 ?? ?? ?? ??',
+  -- (2.0.2) the game's first-person switch (the camera's, on and off): your helldiver's first-person record (by the
+  -- helldiver state's map: stride, records, the flag it sets), right next to the helldiver state record ...
+  fp = '48 69 D0 ?? ?? ?? ?? 48 69 C0 ?? ?? ?? ?? 49 8D BA ?? ?? ?? ?? 4C 89 6C 24 ?? 49 03 D2 4C 89 7C 24 ?? 48 89 54 24 ??'
+    .. ' 45 33 C0 48 03 F8 4C 8D AA ?? ?? ?? ?? 49 8B 84 CA ?? ?? ?? ?? 41 8B D6 8B 48 0C 48 8B 05 ?? ?? ?? ?? 44 88 77 ??'
+    .. ' 89 4C 24 ?? 41 8B 4D 00 4C 8B 48 18 41 FF 91 ?? ?? ?? ??',
+  -- ... and the routine it runs for each item on you: the item's unit (its entity row + 12) shown (entity API +0x18
+  -- table +0x668) or hidden (+0x658: unit, 0, 0), then its parts (when the parts' map has the item) and its lights
+  fp_item = '48 8B 05 ?? ?? ?? ?? 8B 4F ?? 45 84 E4 74 ?? 48 8B 50 18 FF 92 ?? ?? ?? ?? EB ?? 4C 8B 48 18 45 33 C0 33 D2'
+         .. ' 41 FF 91 ?? ?? ?? ?? 8B 47 08 3B 05 ?? ?? ?? ?? 74 ?? 48 8B 0D ?? ?? ?? ?? 44 8B C3 44 8B 89 ?? ?? ?? ??'
+         .. ' 44 8B 99 ?? ?? ?? ?? 44 0F AF D8',
   -- the attachables' detach (entity, 0, 0), from one of its many callers
   detach = '48 8B 0D ?? ?? ?? ?? 45 33 C0 48 C7 44 24 48 00 00 00 00 4C 8B 4C 24 48 E8 ?? ?? ?? ??',
 }
 -- (inside the attach routine) its map by entity and its records: the attached-to entity is a record's first word
 local P_ATT_MAP = '44 8B 41 ?? 44 8B 49 ??'
 local P_ATT_MAP2 = '4D 8B 56 ?? 45 8B 5E ??'
+local P_FP_CALL = '45 0F B6 C4 8B D0 E8 ?? ?? ?? ??'           -- (inside the item routine) its two calls
 local P_ISW_SIZE = '44 8B 99 ?? ?? ?? ?? 45 33 C9'                 -- (inside the switch) the map size: the same manager
 local P_ISW_BLOCK = '41 80 7C C0 ?? 00 75 ?? 8B D1 48 C1 E2 ??'     -- ... the 'blocked' byte and the record size (shift)
 local P_ATT_RECS = '4D 69 E4 ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? ?? 4D 03 66 ??'
@@ -336,7 +347,8 @@ local P_UNITS = '48 8B 35 ?? ?? ?? ?? 8B D9 48 8D 8E D0 00 00 00 FF 15 ?? ?? ?? 
              .. ' 72 04 33 DB EB 1C 8B C8 48 8B 86 A0 00 00 00 C1 EB 16 38 1C 01 75 EB 48 8B 86 88 00 00 00 48 8B 1C C8'
 local KNOWN = { players = 0x3326468, owners = 0x346BF98, equipment = 0x3326738, state = 0x3326D20, imgr = 0x33269A0,
                 im = 0x3326D68, setslot = 0x9AE030, netslot = 0xBF0950, wield = 0xA93E90, wield2 = 0xA951D0, units = 0x1A100F0,
-                attach = 0x812540, detach = 0x813250, attachables = 0x3326698, iswitch = 0x978610 }
+                attach = 0x812540, detach = 0x813250, attachables = 0x3326698, iswitch = 0x978610,
+                fp = 0x826523, fp_item = 0x9AA0A2, fp_parts = 0x74B580, fp_lights = 0x8C0070 }
 local UNIT = { id = 8, poses = 0x88, pos = 48 }
 
 local G = {}
@@ -450,6 +462,30 @@ local function resolve()
     return A
   end)
   if okt then G.att = et else G.att_note = tostring(et) end
+  -- (2.0.2) first person (optional: without it the carried item shows in first person, as before)
+  if G.att then
+    local okf, ef = pcall(function()
+      local o6, t6 = at('fp'); local o7, t7 = at('fp_item')
+      local F = { stride = su32(t6, 10), recs = su32(t6, 17), flag = t6:byte(77), at = gb + crva + o6 }
+      local part = su32(t6, 48) - G.state_recs
+      if su32(t6, 3) ~= G.state_stride or part < 0 or part >= G.state_stride then error('not the helldiver state', 0) end
+      if rip(o6 + 66, t6:sub(67), 3, 7) ~= G.att.ent or rip(o7, t7, 3, 7) ~= G.att.ent then error('the entity API differs', 0) end
+      if F.stride < 0x40 or F.stride > 0x4000 or F.flag >= F.stride then error('not plausible', 0) end
+      F.tbl, F.show_fn, F.hide_fn = t7:byte(19), su32(t7, 21), su32(t7, 39)
+      if t7:byte(10) ~= 12 or F.tbl ~= G.att.node_tbl or t7:byte(31) ~= F.tbl then error('its item is not as known', 0) end
+      if F.show_fn > 0x2000 or F.hide_fn > 0x2000 then error('not plausible', 0) end
+      F.parts, F.parts_map = rip(o7 + 54, t7:sub(55), 3, 7), su32(t7, 67) - 8
+      if su32(t7, 74) ~= F.parts_map + 16 then error('the parts\' map is not as known', 0) end
+      local body = text:sub(o7 + 1, o7 + 0x140)
+      local r = find_all(body, P_FP_CALL, 3)
+      if #r ~= 2 then error('its calls are not as known', 0) end
+      F.parts_fn = gb + crva + o7 + r[1] + 11 + si32(body, r[1] + 7)
+      F.lights_fn = gb + crva + o7 + r[2] + 11 + si32(body, r[2] + 7)
+      F.item_at = gb + crva + o7
+      return F
+    end)
+    if okf then G.fp = ef else G.fp_note = tostring(ef) end
+  end
   -- the interactables' switch (optional: without it the pick-up is only kept off by hand)
   local oki, ei = pcall(function()
     local o5, t5 = at('iswitch')
@@ -480,10 +516,13 @@ local function resolve()
   cmp('units', G.units - EM.base)
   if G.isw then cmp('iswitch', G.isw.fn - gb) end
   if G.att then cmp('attach', G.att.attach - gb); cmp('detach', G.att.detach - gb); cmp('attachables', G.att.mgr - gb) end
+  if G.fp then cmp('fp', G.fp.at - gb); cmp('fp_item', G.fp.item_at - gb); cmp('fp_parts', G.fp.parts_fn - gb); cmp('fp_lights', G.fp.lights_fn - gb) end
   note('weapon-switch sound', G.audio and string.format('found (audio API %x, entity API %x)', G.audio.api - gb, G.audio.ent - gb)
     or ('NOT found - swaps are silent (' .. tostring(G.audio_note) .. ')'))
   note('on your back', G.att and string.format('the game\'s attach found (attachables %x%s)', G.att.mgr - gb,
     G.att.map and '' or '; its records not read, so it can\'t be checked') or ('NOT found - your weapon stays where the game sets it down (' .. tostring(G.att_note) .. ')'))
+  if G.att then note('first person', G.fp and 'the game\'s first-person switch found: your carried item is hidden in first person the game\'s way'
+    or ('NOT found - your carried item shows in first person (' .. tostring(G.fp_note) .. ')')) end
   if not G.isw then note('pick-up switch', 'NOT found - the pick-up is only kept off by hand (' .. tostring(G.isw_note) .. ')') end
   if G.audio and not G.audio.persp then note('weapon-switch sound mix', 'not found (' .. tostring(G.audio.persp_note) .. ')') end
   note('game code', string.format('found in %.2f s; %s%s', os.clock() - t0,
@@ -1357,11 +1396,55 @@ no_jit(game_attach)
 no_jit(game_switch)
 no_jit(game_detach)
 
+-- (2.0.2) First person. The game hides the weapons it holsters on you while you're in first person, but not the one I put
+-- on your back, so a long one (the EAT, more so the Leveller and the Quasar) cut into your view when turning, or
+-- filled it. Its own way, found in its first-person switch (the camera turns it on and off): a flag in your helldiver's
+-- first-person record (CY.fp_addr), and, for each item on you, the entity API's unit visibility (hide: +0x658 with
+-- (unit, 0, 0); show again: +0x668), the same for the item's parts (a routine of its own, which wants an item that
+-- has parts), and its lights (another routine, which checks by itself). Shadows go with it, as with the game's own.
+-- The aiming view in third person doesn't count (the sound mix's view, which I tried first, does: it hid the weapon on aim).
+-- Only while something is on your back: one byte read a frame, the record looked up again every 0.5 s.
+local VIS_HIDE = ffi.typeof('void (*)(uint32_t, uint32_t, uint32_t)')
+local VIS_SHOW = ffi.typeof('void (*)(uint32_t)')
+local VIS_ITEM = ffi.typeof('void (*)(void *, uint32_t, uint32_t)')
+function CY.fp_addr()
+  local F, sm = G.fp, R.av and read_ptr(G.state)
+  if not (F and sm) then return nil end
+  local i = map_get(sm + G.state_map, R.av, 4096)
+  if not i or i >= 64 then return nil end
+  return sm + F.recs + i * F.stride + F.flag
+end
+local function game_show(w, wu, on)
+  local F = G.fp
+  if not unit_alive(wu) then return nil, 'its unit is not alive for the game' end
+  local ent = read_ptr(G.att.ent); local tbl = ent and read_ptr(ent + F.tbl)
+  local f = tbl and read_ptr(tbl + (on and F.show_fn or F.hide_fn))
+  if not code_at(f) then return nil, 'the entity API is not in loaded code' end
+  if on then ffi.cast(VIS_SHOW, f)(wu) else ffi.cast(VIS_HIDE, f)(wu, 0, 0) end
+  local v = on and 1 or 0
+  local pm = read_ptr(F.parts)
+  local parts = pm and map_get(pm + F.parts_map, w, 0x100000)
+  if parts then ffi.cast(VIS_ITEM, F.parts_fn)(nil, w, v) end
+  ffi.cast(VIS_ITEM, F.lights_fn)(nil, w, v)
+  return true, parts and 'with its parts' or 'it has no parts'
+end
+no_jit(game_show)
+-- shown again (when it leaves your back, or first person is off), if I hid it
+local function fp_show(st, why)
+  if not st.hidden then return end
+  st.hidden = false
+  if not unit_alive(st.wu) then return end          -- (gone, e.g. the Solo Silo's remote with its silo: nothing to show)
+  local ok, done, how = pcall(game_show, st.w, st.wu, true)
+  rec(string.format('first person: your %s shown again (%s): %s', wname(st.wt), why,
+    ok and done and how or ('could NOT be shown: ' .. tostring(done or how))))
+end
+
 -- off your back (the game's detach: its physics back on), unlocked, its pick-up on (when it was the mod that turned it off)
 local function unstash(st, why)
   session.dirty = true               -- (1.1.2: the set-down counts are in the log)
   if st.remote then rec(string.format('carry (joined): your %s no longer carried (%s)', wname(st.wt), why)); return end
   local parts = {}
+  fp_show(st, 'off your back')       -- ((2.0.2) shown before it goes anywhere)
   if st.attached then
     -- (1.1.0) only when it is still on your helldiver (a carried item the game destroyed, e.g. the Solo Silo's remote
     -- when its silo is gone, may have had its id given to something else)
@@ -1507,6 +1590,23 @@ local function keep(st, now)
   -- (1.2.0) Swap, Don't Drop: with the item in your support slot not in your hands, the game holsters it on your back
   -- too. The carried one then stays on its own spot, shifted beside it (CY.place: an offset for each back spot), until
   -- you draw the slot's item again. Table look-ups only; an attach only on a change.
+  if st.attached and G.att and R.avunit then
+    -- (2.0.2) first person: hidden the game's way while its flag is on (see CY.fp_addr)
+    if G.fp and now >= (st.fp_wait or 0) then
+      if now >= (st.fp_at or 0) then st.fp_at, st.fp = now + 0.5, CY.fp_addr() end
+      local first = st.fp ~= nil and fetch(st.fp, 1) and b8(0) ~= 0
+      if first ~= (st.hidden or false) then
+        if first then
+          local ok, done, how = pcall(game_show, st.w, st.wu, false)
+          if ok and done then st.hidden = true
+          else st.fp_wait, st.fp_fails = now + 1, (st.fp_fails or 0) + 1 end   -- (not tried again every frame)
+          if (st.fp_fails or 0) <= 3 then rec(string.format('first person: your %s %s', wname(st.wt), ok and done and ('hidden, the game\'s way (' .. how .. ')')
+            or ('could NOT be hidden: ' .. tostring(done or how)))) end
+        else fp_show(st, 'first person off') end
+        session.dirty = true
+      end
+    end
+  elseif st.hidden then fp_show(st, 'not on your back') end
   if CY.on and st.attached and G.att and R.avunit then
     local hw, hx = HOLSTER[st.wt], HOLSTER[st.xt]
     local own = hw and hw[1]
